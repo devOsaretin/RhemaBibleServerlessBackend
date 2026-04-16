@@ -1,0 +1,18 @@
+
+{
+  "response": {
+    "text": "A comprehensive, Bible-based answer explaining the theme of the query",
+    "originalLanguageInsights": ["list of definition of each original word e.g agapaō - Divine, unconditional love; the highest form of love that seeks the best for others regardless of personal cost."],
+    "relatedVerses": [
+      {
+        "book": "string",
+        "chapter": "number",
+        "verse": "number"
+      }
+    ],
+    "theologicalMeaning": "A detailed theological explanation and meaning applying the verses to the query",
+    "historicalContext": "Relevant historical, cultural, or doctrinal insights, including Hebrew/Greek word meanings where applicable",
+    "practicalApplications": ["list of strings of practical application(for modern living) of the query if applicable"],
+    "devotionalInsight": "An inspiring meditation on how God's Word illuminates the believer's heart..."
+  }
+}

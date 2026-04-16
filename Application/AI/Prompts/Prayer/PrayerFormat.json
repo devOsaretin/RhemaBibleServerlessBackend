@@ -1,0 +1,12 @@
+{
+  "response": {
+    "prayer": "A comprehensive, Bible-backed, spirit filled powerful prayer",
+    "associatedVerses": [
+      {
+        "book": "string",
+        "chapter": "number",
+        "verse": "number"
+      }
+    ]
+  }
+}

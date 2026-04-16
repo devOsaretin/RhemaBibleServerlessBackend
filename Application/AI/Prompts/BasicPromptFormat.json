@@ -1,0 +1,12 @@
+{
+  "response": {
+    "text": "A comprehensive, Bible-based answer explaining the theme of the query",
+    "relatedVerses": [
+      {
+        "book": "string",
+        "chapter": "number",
+        "verse": "number"
+      }
+    ]
+  }
+}
