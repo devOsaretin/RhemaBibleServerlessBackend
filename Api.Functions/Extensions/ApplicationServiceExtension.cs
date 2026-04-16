@@ -7,25 +7,22 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using RhemaBibleAppServerless.Application.Configuration;
+using RhemaBibleAppServerless.Application.Persistence;
+using RhemaBibleAppServerless.Application.Services.Maintenance;
+using RhemaBibleAppServerless.Infrastructure.Mongo;
 
 public static class ApplicationServiceExtension
 {
   public static IServiceCollection AddApplicationServices(this IServiceCollection services, IConfiguration config)
   {
-    services.AddHttpContextAccessor();
     services.AddMemoryCache();
-    services.Configure<Microsoft.AspNetCore.Http.Json.JsonOptions>(options =>
-    {
-      options.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
-    });
-    services.Configure<JsonOptions>(options =>
-    {
-      options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
-    });
+    services.AddSingleton<ICurrentPrincipalAccessor, AsyncLocalCurrentPrincipalAccessor>();
 
     MongoEnumStringConvention.RegisterEnumStringConvention();
 
     services.Configure<MongoDbSettings>(config.GetSection("MongoDbSettings"));
+    services.Configure<MongoIndexInitializationOptions>(config.GetSection(MongoIndexInitializationOptions.SectionName));
     services.Configure<RevenueCatSettings>(config.GetSection("RevenueCat"));
     services.Configure<ClerkSettings>(config.GetSection("Clerk"));
     services.Configure<ElevenLabsTtsOptions>(config.GetSection(ElevenLabsTtsOptions.SectionName));
@@ -46,6 +43,8 @@ public static class ApplicationServiceExtension
 
     services.AddSingleton<MongoDbService>();
     services.AddSingleton<IMongoDbService>(sp => sp.GetRequiredService<MongoDbService>());
+    services.AddSingleton<MongoIndexInitializer>();
+    services.AddSingleton<LegacySubscriptionDataMigrationRunner>();
     services.AddSingleton<IUserResourceEpochStore, UserResourceEpochStore>();
     services.AddSingleton<IPromptFileReader, CachedPromptFileReader>();
 
@@ -97,9 +96,6 @@ public static class ApplicationServiceExtension
         httpClient,
         "gpt-4.1-mini");
     });
-
-    services.AddHostedService<SubscriptionExpirationBackgroundService>();
-    services.AddHostedService<LegacySubscriptionDataMigrationHostedService>();
 
     return services;
   }

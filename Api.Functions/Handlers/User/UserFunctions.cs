@@ -1,61 +1,72 @@
 using System.Net;
 using System.Security.Claims;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Functions.Worker;
+using Microsoft.Azure.Functions.Worker.Http;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
-public class UserFunctions(IUserService userService, IAiQuotaService aiQuotaService, IFunctionTokenValidator tokenValidator, IHostEnvironment env, ILogger<UserFunctions> logger)
+public class UserFunctions(
+  IUserService userService,
+  IAiQuotaService aiQuotaService,
+  IFunctionTokenValidator tokenValidator,
+  ICurrentPrincipalAccessor principalAccessor,
+  IHostEnvironment env,
+  ILogger<UserFunctions> logger)
 {
   [Function("User_GetById")]
-  public Task<IActionResult> GetById(
-    [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "v1/user/{id}")] HttpRequest req,
+  public Task<HttpResponseData> GetById(
+    [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "v1/user/{id}")] HttpRequestData req,
     string id,
     CancellationToken cancellationToken) =>
     FunctionExecutionHelper.ExecuteAsync(req, async ct =>
     {
-      req.RequireLocalJwtUser(tokenValidator);
+      var principal = req.RequireLocalJwtUser(tokenValidator, principalAccessor);
+      var callerId = principal.GetAuthenticatedUserId();
+      if (string.IsNullOrEmpty(callerId))
+        return req.CreateJsonResponse(HttpStatusCode.Unauthorized, ApiResponse<UserDto>.ErrorResponse("User id not found in token"));
+
+      if (!string.Equals(callerId, id, StringComparison.Ordinal))
+        return req.CreateJsonResponse(HttpStatusCode.Forbidden, ApiResponse<UserDto>.ErrorResponse("You can only access your own user profile."));
 
       var user = await userService.GetByIdAsync(id, ct);
       if (user == null)
-        return req.ApiResult(ApiResponse<UserDto>.ErrorResponse("User not found"), HttpStatusCode.NotFound);
+        return req.CreateJsonResponse(HttpStatusCode.NotFound, ApiResponse<UserDto>.ErrorResponse("User not found"));
 
-      return req.ApiResult(ApiResponse<UserDto>.SuccessResponse(user.ToDto(aiQuotaService)));
+      return req.CreateJsonResponse(HttpStatusCode.OK, ApiResponse<UserDto>.SuccessResponse(user.ToDto(aiQuotaService)));
     }, cancellationToken, logger, env);
 
   [Function("User_GetMyProfile")]
-  public Task<IActionResult> GetMyProfile(
-    [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "v1/user/me/profile")] HttpRequest req,
+  public Task<HttpResponseData> GetMyProfile(
+    [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "v1/user/me/profile")] HttpRequestData req,
     CancellationToken cancellationToken) =>
     FunctionExecutionHelper.ExecuteAsync(req, async ct =>
     {
-      var principal = req.RequireLocalJwtUser(tokenValidator);
-      var userId = principal.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+      var principal = req.RequireLocalJwtUser(tokenValidator, principalAccessor);
+      var userId = principal.GetAuthenticatedUserId();
       if (string.IsNullOrEmpty(userId))
-        return req.ApiResult(ApiResponse<UserDto>.ErrorResponse("Clerk ID not found"), HttpStatusCode.Unauthorized);
+        return req.CreateJsonResponse(HttpStatusCode.Unauthorized, ApiResponse<UserDto>.ErrorResponse("User id not found in token"));
 
       var user = await userService.GetByIdAsync(userId, ct);
       if (user == null)
-        return req.ApiResult(ApiResponse<UserDto>.ErrorResponse("User not found"), HttpStatusCode.NotFound);
+        return req.CreateJsonResponse(HttpStatusCode.NotFound, ApiResponse<UserDto>.ErrorResponse("User not found"));
 
-      return req.ApiResult(ApiResponse<UserDto>.SuccessResponse(user.ToDto(aiQuotaService)));
+      return req.CreateJsonResponse(HttpStatusCode.OK, ApiResponse<UserDto>.SuccessResponse(user.ToDto(aiQuotaService)));
     }, cancellationToken, logger, env);
 
   [Function("User_GetMySubscription")]
-  public Task<IActionResult> GetMySubscription(
-    [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "v1/user/me/subscription")] HttpRequest req,
+  public Task<HttpResponseData> GetMySubscription(
+    [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "v1/user/me/subscription")] HttpRequestData req,
     CancellationToken cancellationToken) =>
     FunctionExecutionHelper.ExecuteAsync(req, async ct =>
     {
-      var principal = req.RequireLocalJwtUser(tokenValidator);
-      var userId = principal.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+      var principal = req.RequireLocalJwtUser(tokenValidator, principalAccessor);
+      var userId = principal.GetAuthenticatedUserId();
       if (string.IsNullOrEmpty(userId))
-        return req.ApiResult(ApiResponse<SubscriptionStatusDto>.ErrorResponse("Clerk ID not found"), HttpStatusCode.Unauthorized);
+        return req.CreateJsonResponse(HttpStatusCode.Unauthorized, ApiResponse<SubscriptionStatusDto>.ErrorResponse("User id not found in token"));
 
       var user = await userService.GetByIdAsync(userId, ct);
       if (user == null)
-        return req.ApiResult(ApiResponse<SubscriptionStatusDto>.ErrorResponse("User not found"), HttpStatusCode.NotFound);
+        return req.CreateJsonResponse(HttpStatusCode.NotFound, ApiResponse<SubscriptionStatusDto>.ErrorResponse("User not found"));
 
       var subscriptionStatus = new SubscriptionStatusDto
       {
@@ -64,7 +75,7 @@ public class UserFunctions(IUserService userService, IAiQuotaService aiQuotaServ
         SubscriptionExpiresAt = user.SubscriptionExpiresAt
       };
 
-      return req.ApiResult(ApiResponse<SubscriptionStatusDto>.SuccessResponse(subscriptionStatus));
+      return req.CreateJsonResponse(HttpStatusCode.OK, ApiResponse<SubscriptionStatusDto>.SuccessResponse(subscriptionStatus));
     }, cancellationToken, logger, env);
 }
 

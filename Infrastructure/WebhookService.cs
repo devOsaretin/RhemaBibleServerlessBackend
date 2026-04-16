@@ -1,7 +1,7 @@
 using MongoDB.Driver;
+using RhemaBibleAppServerless.Application.Persistence;
 
-
-public class WebhookService(MongoDbService mongoDbService) : IWebHookService
+public class WebhookService(IMongoDbService mongoDbService) : IWebHookService
 {
     private readonly IMongoCollection<ProcessedWebhook> _processedWebhooks = mongoDbService.ProcessedWebhook;
     public async Task<bool> TryMarkEventProcessedAsync(string eventId, CancellationToken ct)
