@@ -48,7 +48,11 @@ public class RevenueCatFunctions(
         appUserId);
 
       if (!await webHookService.TryMarkEventProcessedAsync(eventData.Id!, cancellationToken))
+      {
+        logger.LogWarning("Failed to mark event as processed");
         return req.CreateResponse(HttpStatusCode.OK);
+      }
+
 
       var user = await userService.GetByIdAsync(appUserId, cancellationToken);
       if (user == null)
@@ -60,6 +64,8 @@ public class RevenueCatFunctions(
       var expiresAt = FromUnixMs(eventData.ExpirationAtMs);
       var isActive = expiresAt == null || expiresAt > DateTime.UtcNow;
       var newSubscriptionType = isActive ? MapProduct(eventData.ProductId) : SubscriptionType.Free;
+
+
 
       if (user.SubscriptionType != newSubscriptionType || user.SubscriptionExpiresAt != expiresAt)
       {
@@ -74,6 +80,7 @@ public class RevenueCatFunctions(
           "Updated user {UserId} to {Type}, expires {Expiry}",
           user.Id, newSubscriptionType, expiresAt);
       }
+
 
       return req.CreateResponse(HttpStatusCode.OK);
     }
