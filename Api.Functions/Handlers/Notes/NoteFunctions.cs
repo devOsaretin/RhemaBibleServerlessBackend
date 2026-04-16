@@ -4,7 +4,7 @@ using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using RhemaBibleAppServerless.Domain.Models;
+
 
 public class NoteFunctions(
   INoteService noteService,
@@ -17,9 +17,8 @@ public class NoteFunctions(
   public Task<HttpResponseData> GetNotes(
     [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "v1/note")] HttpRequestData req,
     CancellationToken cancellationToken) =>
-    FunctionExecutionHelper.ExecuteAsync(req, async ct =>
+    FunctionExecutionHelper.ExecuteWithAuthAsync(req, async (principal, ct) =>
     {
-      var principal = req.RequireLocalJwtUser(tokenValidator, principalAccessor);
       var userId = principal.GetRequiredClaim(ClaimTypes.NameIdentifier);
 
       var query = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(req.Url.Query);
@@ -28,16 +27,15 @@ public class NoteFunctions(
 
       var pagedResult = await noteService.GetNotesAsync(userId, pageNumber, pageSize);
       var response = ApiResponse<List<Note>>.FromPagedResult(pagedResult);
-      return req.CreateJsonResponse(HttpStatusCode.OK, response);
-    }, cancellationToken, logger, env);
+      return await req.CreateJsonResponse(HttpStatusCode.OK, response);
+    }, tokenValidator, principalAccessor, cancellationToken, logger, env);
 
   [Function("Note_CreateNote")]
   public Task<HttpResponseData> CreateNote(
     [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "v1/note")] HttpRequestData req,
     CancellationToken cancellationToken) =>
-    FunctionExecutionHelper.ExecuteAsync(req, async ct =>
+    FunctionExecutionHelper.ExecuteWithAuthAsync(req, async (principal, ct) =>
     {
-      var principal = req.RequireLocalJwtUser(tokenValidator, principalAccessor);
       var userId = principal.GetRequiredClaim(ClaimTypes.NameIdentifier);
       var note = await req.ReadRequiredJsonAsync<CreateNoteDto>(ct);
 
@@ -49,47 +47,45 @@ public class NoteFunctions(
       };
 
       var created = await noteService.CreateNewNoteAsync(newNote);
-      var res = req.CreateJsonResponse(HttpStatusCode.Created, ApiResponse<Note>.SuccessResponse(created));
+      var res = await req.CreateJsonResponse(HttpStatusCode.Created, ApiResponse<Note>.SuccessResponse(created));
       res.Headers.Add("Location", $"/api/v1/note/{created.Id}");
       return res;
-    }, cancellationToken, logger, env);
+    }, tokenValidator, principalAccessor, cancellationToken, logger, env);
 
   [Function("Note_GetNoteById")]
   public Task<HttpResponseData> GetNoteById(
     [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "v1/note/{id}")] HttpRequestData req,
     string id,
     CancellationToken cancellationToken) =>
-    FunctionExecutionHelper.ExecuteAsync(req, async ct =>
+    FunctionExecutionHelper.ExecuteWithAuthAsync(req, async (principal, ct) =>
     {
-      var principal = req.RequireLocalJwtUser(tokenValidator, principalAccessor);
       var userId = principal.GetAuthenticatedUserId();
       if (string.IsNullOrEmpty(userId))
-        return req.CreateJsonResponse(HttpStatusCode.Unauthorized, ApiResponse<Note>.ErrorResponse("User id not found in token"));
+        return await req.CreateJsonResponse(HttpStatusCode.Unauthorized, ApiResponse<Note>.ErrorResponse("User id not found in token"));
 
       var note = await noteService.GetNoteAsync(id);
       if (note == null)
-        return req.CreateJsonResponse(HttpStatusCode.NotFound, ApiResponse<Note>.ErrorResponse("Note not found"));
+        return await req.CreateJsonResponse(HttpStatusCode.NotFound, ApiResponse<Note>.ErrorResponse("Note not found"));
 
       if (!string.Equals(note.AuthId, userId, StringComparison.Ordinal))
-        return req.CreateJsonResponse(HttpStatusCode.Forbidden, ApiResponse<Note>.ErrorResponse("You do not have access to this note."));
+        return await req.CreateJsonResponse(HttpStatusCode.Forbidden, ApiResponse<Note>.ErrorResponse("You do not have access to this note."));
 
-      return req.CreateJsonResponse(HttpStatusCode.OK, ApiResponse<Note>.SuccessResponse(note));
-    }, cancellationToken, logger, env);
+      return await req.CreateJsonResponse(HttpStatusCode.OK, ApiResponse<Note>.SuccessResponse(note));
+    }, tokenValidator, principalAccessor, cancellationToken, logger, env);
 
   [Function("Note_UpdateNote")]
   public Task<HttpResponseData> UpdateNote(
     [HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "v1/note/{id}")] HttpRequestData req,
     string id,
     CancellationToken cancellationToken) =>
-    FunctionExecutionHelper.ExecuteAsync(req, async ct =>
+    FunctionExecutionHelper.ExecuteWithAuthAsync(req, async (principal, ct) =>
     {
-      var principal = req.RequireLocalJwtUser(tokenValidator, principalAccessor);
       var userId = principal.GetRequiredClaim(ClaimTypes.NameIdentifier);
       var updatedNote = await req.ReadRequiredJsonAsync<UpdateNoteDto>(ct);
 
       var note = await noteService.GetNoteAsync(id);
       if (note == null)
-        return req.CreateJsonResponse(HttpStatusCode.NotFound, ApiResponse<string>.ErrorResponse("Note not found or you don't have permission"));
+        return await req.CreateJsonResponse(HttpStatusCode.NotFound, ApiResponse<string>.ErrorResponse("Note not found or you don't have permission"));
 
       var update = new Note
       {
@@ -102,25 +98,24 @@ public class NoteFunctions(
 
       var updated = await noteService.UpdateNoteAsync(id, userId, update);
       if (updated == null)
-        return req.CreateJsonResponse(HttpStatusCode.NotFound, ApiResponse<string>.ErrorResponse("Note not found or you don't have permission"));
+        return await req.CreateJsonResponse(HttpStatusCode.NotFound, ApiResponse<string>.ErrorResponse("Note not found or you don't have permission"));
 
-      return req.CreateJsonResponse(HttpStatusCode.OK, ApiResponse<Note>.SuccessResponse(updated));
-    }, cancellationToken, logger, env);
+      return await req.CreateJsonResponse(HttpStatusCode.OK, ApiResponse<Note>.SuccessResponse(updated));
+    }, tokenValidator, principalAccessor, cancellationToken, logger, env);
 
   [Function("Note_DeleteNote")]
   public Task<HttpResponseData> DeleteNote(
     [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "v1/note/{id}")] HttpRequestData req,
     string id,
     CancellationToken cancellationToken) =>
-    FunctionExecutionHelper.ExecuteAsync(req, async ct =>
+    FunctionExecutionHelper.ExecuteWithAuthAsync(req, async (principal, ct) =>
     {
-      var principal = req.RequireLocalJwtUser(tokenValidator, principalAccessor);
       var userId = principal.GetRequiredClaim(ClaimTypes.NameIdentifier);
 
       if (await noteService.DeleteNoteAsync(userId, id))
         return req.CreateResponse(HttpStatusCode.OK);
 
-      return req.CreateJsonResponse(HttpStatusCode.BadRequest, new { message = "Cannot delete note" });
-    }, cancellationToken, logger, env);
+      return await req.CreateJsonResponse(HttpStatusCode.BadRequest, new { message = "Cannot delete note" });
+    }, tokenValidator, principalAccessor, cancellationToken, logger, env);
 }
 

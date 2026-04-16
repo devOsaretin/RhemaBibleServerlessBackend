@@ -30,7 +30,7 @@ public class RevenueCatFunctions(
       if (webhookEvent?.Event == null)
       {
         logger.LogWarning("Received webhook with null event");
-        return req.CreateJsonResponse(HttpStatusCode.BadRequest, new { message = "Invalid webhook payload" });
+        return await req.CreateJsonResponse(HttpStatusCode.BadRequest, new { message = "Invalid webhook payload" });
       }
 
       var eventData = webhookEvent.Event;
@@ -39,7 +39,7 @@ public class RevenueCatFunctions(
       if (string.IsNullOrEmpty(appUserId))
       {
         logger.LogWarning("Received webhook with null app_user_id");
-        return req.CreateJsonResponse(HttpStatusCode.BadRequest, new { message = "app_user_id is required" });
+        return await req.CreateJsonResponse(HttpStatusCode.BadRequest, new { message = "app_user_id is required" });
       }
 
       logger.LogInformation(

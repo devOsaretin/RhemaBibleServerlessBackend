@@ -74,11 +74,12 @@ public static class FunctionRequestDataExtensions
     return principal;
   }
 
-  public static HttpResponseData CreateJsonResponse(this HttpRequestData request, HttpStatusCode statusCode, object body)
+  public static async Task<HttpResponseData> CreateJsonResponse(this HttpRequestData request, HttpStatusCode statusCode, object body)
   {
     var res = request.CreateResponse(statusCode);
+    res.Headers.Remove("Content-Type");
     res.Headers.Add("Content-Type", "application/json; charset=utf-8");
-    res.WriteString(JsonSerializer.Serialize(body, DefaultJsonOptions));
+    await res.WriteStringAsync(JsonSerializer.Serialize(body, DefaultJsonOptions));
     return res;
   }
 }

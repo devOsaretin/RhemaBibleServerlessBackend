@@ -25,22 +25,23 @@ public class AiFunctions(
   {
     try
     {
-      return await FunctionExecutionHelper.ExecuteAsync(
+      return await FunctionExecutionHelper.ExecuteWithAuthAsync(
         req,
-        async ct =>
+        async (_, ct) =>
         {
-          req.RequireLocalJwtUser(tokenValidator, principalAccessor);
           var query = await req.ReadRequiredJsonAsync<ChatRequest>(ct);
           var result = await aiClient.GenerateAsync(query.Prompt, ct);
-          return req.CreateJsonResponse(HttpStatusCode.OK, new { data = result.Data, aiUsage = result.AiUsage });
+          return await req.CreateJsonResponse(HttpStatusCode.OK, new { data = result.Data, aiUsage = result.AiUsage });
         },
+        tokenValidator,
+        principalAccessor,
         cancellationToken,
         logger,
         env);
     }
     catch (AiMonthlyQuotaExceededException ex)
     {
-      return req.CreateJsonResponse(HttpStatusCode.TooManyRequests, QuotaExceededBody(ex));
+      return await req.CreateJsonResponse(HttpStatusCode.TooManyRequests, QuotaExceededBody(ex));
     }
   }
 
@@ -51,22 +52,23 @@ public class AiFunctions(
   {
     try
     {
-      return await FunctionExecutionHelper.ExecuteAsync(
+      return await FunctionExecutionHelper.ExecuteWithAuthAsync(
         req,
-        async ct =>
+        async (_, ct) =>
         {
-          req.RequireLocalJwtUser(tokenValidator, principalAccessor);
           var query = await req.ReadRequiredJsonAsync<ChatRequest>(ct);
           var result = await aiClient.GeneratePrayerAsync(query.Prompt, ct);
-          return req.CreateJsonResponse(HttpStatusCode.OK, new { data = result.Data, aiUsage = result.AiUsage });
+          return await req.CreateJsonResponse(HttpStatusCode.OK, new { data = result.Data, aiUsage = result.AiUsage });
         },
+        tokenValidator,
+        principalAccessor,
         cancellationToken,
         logger,
         env);
     }
     catch (AiMonthlyQuotaExceededException ex)
     {
-      return req.CreateJsonResponse(HttpStatusCode.TooManyRequests, QuotaExceededBody(ex));
+      return await req.CreateJsonResponse(HttpStatusCode.TooManyRequests, QuotaExceededBody(ex));
     }
   }
 
@@ -77,22 +79,23 @@ public class AiFunctions(
   {
     try
     {
-      return await FunctionExecutionHelper.ExecuteAsync(
+      return await FunctionExecutionHelper.ExecuteWithAuthAsync(
         req,
-        async ct =>
+        async (_, ct) =>
         {
-          req.RequireLocalJwtUser(tokenValidator, principalAccessor);
           var query = await req.ReadRequiredJsonAsync<ChatRequest>(ct);
           var result = await aiClient.GenerateChatAsync(query.Prompt, ct);
-          return req.CreateJsonResponse(HttpStatusCode.OK, new { data = result.Data, aiUsage = result.AiUsage });
+          return await req.CreateJsonResponse(HttpStatusCode.OK, new { data = result.Data, aiUsage = result.AiUsage });
         },
+        tokenValidator,
+        principalAccessor,
         cancellationToken,
         logger,
         env);
     }
     catch (AiMonthlyQuotaExceededException ex)
     {
-      return req.CreateJsonResponse(HttpStatusCode.TooManyRequests, QuotaExceededBody(ex));
+      return await req.CreateJsonResponse(HttpStatusCode.TooManyRequests, QuotaExceededBody(ex));
     }
   }
 
@@ -103,23 +106,24 @@ public class AiFunctions(
   {
     try
     {
-      return await FunctionExecutionHelper.ExecuteAsync(
+      return await FunctionExecutionHelper.ExecuteWithAuthAsync(
         req,
-        async ct =>
+        async (_, ct) =>
         {
-          req.RequireLocalJwtUser(tokenValidator, principalAccessor);
           var query = await req.ReadRequiredJsonAsync<ChatRequest>(ct);
           var res = CreateSseResponse(req);
           await WriteSseStreamAsync(res, aiClient.StreamGenerateAsync(query.Prompt, ct), ct);
           return res;
         },
+        tokenValidator,
+        principalAccessor,
         cancellationToken,
         logger,
         env);
     }
     catch (AiMonthlyQuotaExceededException ex)
     {
-      return req.CreateJsonResponse(HttpStatusCode.TooManyRequests, QuotaExceededBody(ex));
+      return await req.CreateJsonResponse(HttpStatusCode.TooManyRequests, QuotaExceededBody(ex));
     }
   }
 
@@ -130,23 +134,24 @@ public class AiFunctions(
   {
     try
     {
-      return await FunctionExecutionHelper.ExecuteAsync(
+      return await FunctionExecutionHelper.ExecuteWithAuthAsync(
         req,
-        async ct =>
+        async (_, ct) =>
         {
-          req.RequireLocalJwtUser(tokenValidator, principalAccessor);
           var query = await req.ReadRequiredJsonAsync<ChatRequest>(ct);
           var res = CreateSseResponse(req);
           await WriteSseStreamAsync(res, aiClient.StreamGeneratePrayerAsync(query.Prompt, ct), ct);
           return res;
         },
+        tokenValidator,
+        principalAccessor,
         cancellationToken,
         logger,
         env);
     }
     catch (AiMonthlyQuotaExceededException ex)
     {
-      return req.CreateJsonResponse(HttpStatusCode.TooManyRequests, QuotaExceededBody(ex));
+      return await req.CreateJsonResponse(HttpStatusCode.TooManyRequests, QuotaExceededBody(ex));
     }
   }
 
@@ -157,23 +162,24 @@ public class AiFunctions(
   {
     try
     {
-      return await FunctionExecutionHelper.ExecuteAsync(
+      return await FunctionExecutionHelper.ExecuteWithAuthAsync(
         req,
-        async ct =>
+        async (_, ct) =>
         {
-          req.RequireLocalJwtUser(tokenValidator, principalAccessor);
           var query = await req.ReadRequiredJsonAsync<ChatRequest>(ct);
           var res = CreateSseResponse(req);
           await WriteSseStreamAsync(res, aiClient.StreamGenerateChatAsync(query.Prompt, ct), ct);
           return res;
         },
+        tokenValidator,
+        principalAccessor,
         cancellationToken,
         logger,
         env);
     }
     catch (AiMonthlyQuotaExceededException ex)
     {
-      return req.CreateJsonResponse(HttpStatusCode.TooManyRequests, QuotaExceededBody(ex));
+      return await req.CreateJsonResponse(HttpStatusCode.TooManyRequests, QuotaExceededBody(ex));
     }
   }
 

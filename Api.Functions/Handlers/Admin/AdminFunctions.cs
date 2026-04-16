@@ -24,7 +24,7 @@ public class AdminFunctions(
       var principal = await req.RequireAdminClerkUserAsync(tokenValidator, principalAccessor, ct);
       var userId = principal.GetRequiredClaim(ClaimTypes.NameIdentifier);
       var admin = await adminService.GetAdminAsync(userId);
-      return req.CreateJsonResponse(HttpStatusCode.OK, ApiResponse<UserDto>.SuccessResponse(admin!));
+      return await req.CreateJsonResponse(HttpStatusCode.OK, ApiResponse<UserDto>.SuccessResponse(admin!));
     }, cancellationToken, logger, env);
 
   [Function("Admin_GetUsers")]
@@ -52,7 +52,7 @@ public class AdminFunctions(
         query.SubscriptionType,
         query.Search);
 
-      return req.CreateJsonResponse(HttpStatusCode.OK, ApiResponse<UserDto?>.FromPagedResult(pagedResult));
+      return await req.CreateJsonResponse(HttpStatusCode.OK, ApiResponse<UserDto?>.FromPagedResult(pagedResult));
     }, cancellationToken, logger, env);
 
   [Function("Admin_GetUser")]
@@ -65,9 +65,9 @@ public class AdminFunctions(
       await req.RequireAdminClerkUserAsync(tokenValidator, principalAccessor, ct);
       var user = await adminService.GetUserAsync(userId, ct);
       if (user == null)
-        return req.CreateJsonResponse(HttpStatusCode.NotFound, ApiResponse<UserDto>.ErrorResponse("User not found"));
+        return await req.CreateJsonResponse(HttpStatusCode.NotFound, ApiResponse<UserDto>.ErrorResponse("User not found"));
 
-      return req.CreateJsonResponse(HttpStatusCode.OK, ApiResponse<UserDto>.SuccessResponse(user));
+      return await req.CreateJsonResponse(HttpStatusCode.OK, ApiResponse<UserDto>.SuccessResponse(user));
     }, cancellationToken, logger, env);
 
   [Function("Admin_ActivateUser")]
@@ -78,7 +78,7 @@ public class AdminFunctions(
     FunctionExecutionHelper.ExecuteAsync(req, async ct =>
     {
       await req.RequireAdminClerkUserAsync(tokenValidator, principalAccessor, ct);
-      return req.CreateJsonResponse(HttpStatusCode.OK, ApiResponse<UserDto>.SuccessResponse(await adminService.ActivateUserAsync(userId)));
+      return await req.CreateJsonResponse(HttpStatusCode.OK, ApiResponse<UserDto>.SuccessResponse(await adminService.ActivateUserAsync(userId)));
     }, cancellationToken, logger, env);
 
   [Function("Admin_DeactivateUser")]
@@ -89,7 +89,7 @@ public class AdminFunctions(
     FunctionExecutionHelper.ExecuteAsync(req, async ct =>
     {
       await req.RequireAdminClerkUserAsync(tokenValidator, principalAccessor, ct);
-      return req.CreateJsonResponse(HttpStatusCode.OK, ApiResponse<UserDto>.SuccessResponse(await adminService.DeactivateUserAsync(userId)));
+      return await req.CreateJsonResponse(HttpStatusCode.OK, ApiResponse<UserDto>.SuccessResponse(await adminService.DeactivateUserAsync(userId)));
     }, cancellationToken, logger, env);
 
   [Function("Admin_UpdateSubscription")]
@@ -102,10 +102,10 @@ public class AdminFunctions(
       await req.RequireAdminClerkUserAsync(tokenValidator, principalAccessor, ct);
       var subscriptionDto = await req.ReadRequiredJsonAsync<UpdateSubscriptionDto>(ct);
       if (!IsValid(subscriptionDto))
-        return req.CreateJsonResponse(HttpStatusCode.BadRequest, ApiResponse<UserDto>.ErrorResponse("Invalid subscription data"));
+        return await req.CreateJsonResponse(HttpStatusCode.BadRequest, ApiResponse<UserDto>.ErrorResponse("Invalid subscription data"));
 
       var updated = await adminService.UpdateUsersPlanAsync(userId, subscriptionDto, ct);
-      return req.CreateJsonResponse(HttpStatusCode.OK, ApiResponse<UserDto>.SuccessResponse(updated));
+      return await req.CreateJsonResponse(HttpStatusCode.OK, ApiResponse<UserDto>.SuccessResponse(updated));
     }, cancellationToken, logger, env);
 
   [Function("Admin_GetDashboardAnalytics")]
@@ -115,7 +115,7 @@ public class AdminFunctions(
     FunctionExecutionHelper.ExecuteAsync(req, async ct =>
     {
       await req.RequireAdminClerkUserAsync(tokenValidator, principalAccessor, ct);
-      return req.CreateJsonResponse(HttpStatusCode.OK, ApiResponse<DashboardAnalyticsDto>.SuccessResponse(await adminService.GetDashboardAnalyticsAsync()));
+      return await req.CreateJsonResponse(HttpStatusCode.OK, ApiResponse<DashboardAnalyticsDto>.SuccessResponse(await adminService.GetDashboardAnalyticsAsync()));
     }, cancellationToken, logger, env);
 
   [Function("Admin_GetDashboardStatistics")]
@@ -141,7 +141,7 @@ public class AdminFunctions(
         return res;
       }
 
-      return req.CreateJsonResponse(HttpStatusCode.OK, ApiResponse<DashboardStatisticsExportDto>.SuccessResponse(stats));
+      return await req.CreateJsonResponse(HttpStatusCode.OK, ApiResponse<DashboardStatisticsExportDto>.SuccessResponse(stats));
     }, cancellationToken, logger, env);
 
   [Function("Admin_GetUserAiQuota")]
@@ -153,7 +153,7 @@ public class AdminFunctions(
     {
       await req.RequireAdminClerkUserAsync(tokenValidator, principalAccessor, ct);
       var dto = await adminService.GetUserAiQuotaAsync(userId, ct);
-      return req.CreateJsonResponse(HttpStatusCode.OK, ApiResponse<AdminUserAiQuotaDto>.SuccessResponse(dto));
+      return await req.CreateJsonResponse(HttpStatusCode.OK, ApiResponse<AdminUserAiQuotaDto>.SuccessResponse(dto));
     }, cancellationToken, logger, env);
 
   [Function("Admin_ResetUserAiQuota")]
@@ -165,7 +165,7 @@ public class AdminFunctions(
     {
       await req.RequireAdminClerkUserAsync(tokenValidator, principalAccessor, ct);
       var dto = await adminService.ResetUserAiQuotaAsync(userId, ct);
-      return req.CreateJsonResponse(HttpStatusCode.OK, ApiResponse<AdminUserAiQuotaDto>.SuccessResponse(dto));
+      return await req.CreateJsonResponse(HttpStatusCode.OK, ApiResponse<AdminUserAiQuotaDto>.SuccessResponse(dto));
     }, cancellationToken, logger, env);
 
   [Function("Admin_SetUserAiQuotaRemaining")]
@@ -179,7 +179,7 @@ public class AdminFunctions(
       var queryMap = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(req.Url.Query);
       var remainingThisMonth = int.TryParse(queryMap.TryGetValue("remainingThisMonth", out var rem) ? rem.ToString() : null, out var remaining) ? remaining : 0;
       var dto = await adminService.SetUserAiQuotaRemainingAsync(userId, remainingThisMonth, ct);
-      return req.CreateJsonResponse(HttpStatusCode.OK, ApiResponse<AdminUserAiQuotaDto>.SuccessResponse(dto));
+      return await req.CreateJsonResponse(HttpStatusCode.OK, ApiResponse<AdminUserAiQuotaDto>.SuccessResponse(dto));
     }, cancellationToken, logger, env);
 
   private static bool IsValid<T>(T model)

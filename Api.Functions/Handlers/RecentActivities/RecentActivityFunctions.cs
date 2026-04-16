@@ -17,22 +17,20 @@ public class RecentActivityFunctions(
   public Task<HttpResponseData> GetRecentActivitiesByUser(
     [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "v1/recentactivity")] HttpRequestData req,
     CancellationToken cancellationToken) =>
-    FunctionExecutionHelper.ExecuteAsync(req, async ct =>
+    FunctionExecutionHelper.ExecuteWithAuthAsync(req, async (principal, ct) =>
     {
-      var principal = req.RequireLocalJwtUser(tokenValidator, principalAccessor);
       var userId = principal.GetRequiredClaim(ClaimTypes.NameIdentifier);
 
       var activities = await recentActivityService.GetRecentActivitiesByUserAsync(userId);
-      return req.CreateJsonResponse(HttpStatusCode.OK, ApiResponse<IReadOnlyList<RecentActivity>>.SuccessResponse(activities));
-    }, cancellationToken, logger, env);
+      return await req.CreateJsonResponse(HttpStatusCode.OK, ApiResponse<IReadOnlyList<RecentActivity>>.SuccessResponse(activities));
+    }, tokenValidator, principalAccessor, cancellationToken, logger, env);
 
   [Function("RecentActivity_AddUserActivity")]
   public Task<HttpResponseData> AddUserActivity(
     [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "v1/recentactivity")] HttpRequestData req,
     CancellationToken cancellationToken) =>
-    FunctionExecutionHelper.ExecuteAsync(req, async ct =>
+    FunctionExecutionHelper.ExecuteWithAuthAsync(req, async (principal, ct) =>
     {
-      var principal = req.RequireLocalJwtUser(tokenValidator, principalAccessor);
       var userId = principal.GetRequiredClaim(ClaimTypes.NameIdentifier);
       var recentActivityDto = await req.ReadRequiredJsonAsync<AddActivityDto>(ct);
 
@@ -44,7 +42,7 @@ public class RecentActivityFunctions(
       };
 
       var activity = await recentActivityService.AddActivityByUser(newActivity);
-      return req.CreateJsonResponse(HttpStatusCode.OK, ApiResponse<RecentActivity>.SuccessResponse(activity));
-    }, cancellationToken, logger, env);
+      return await req.CreateJsonResponse(HttpStatusCode.OK, ApiResponse<RecentActivity>.SuccessResponse(activity));
+    }, tokenValidator, principalAccessor, cancellationToken, logger, env);
 }
 

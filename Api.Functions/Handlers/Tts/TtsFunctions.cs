@@ -15,12 +15,11 @@ public class TtsFunctions(
   public Task<HttpResponseData> Synthesize(
     [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "v1/tts/synthesize")] HttpRequestData req,
     CancellationToken cancellationToken) =>
-    FunctionExecutionHelper.ExecuteAsync(req, async ct =>
+    FunctionExecutionHelper.ExecuteWithAuthAsync(req, async (_, ct) =>
     {
-      req.RequireLocalJwtUser(tokenValidator, principalAccessor);
       var request = await req.ReadRequiredJsonAsync<TextToSpeechRequest>(ct);
       var result = await textToSpeechService.SynthesizeAsync(request, ct);
-      return req.CreateJsonResponse(HttpStatusCode.OK, ApiResponse<TextToSpeechResponse>.SuccessResponse(result));
-    }, cancellationToken, logger, env);
+      return await req.CreateJsonResponse(HttpStatusCode.OK, ApiResponse<TextToSpeechResponse>.SuccessResponse(result));
+    }, tokenValidator, principalAccessor, cancellationToken, logger, env);
 }
 

@@ -5,11 +5,11 @@ using System.Net;
 public class HealthCheck
 {
     [Function("Health")]
-    public HttpResponseData Run([HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "v1/health")] HttpRequestData req)
+    public async Task<HttpResponseData> Run([HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "v1/health")] HttpRequestData req)
     {
         var version = typeof(HealthCheck).Assembly.GetName().Version?.ToString() ?? "unknown";
 
-        return req.CreateJsonResponse(HttpStatusCode.OK, new
+        return await req.CreateJsonResponse(HttpStatusCode.OK, new
         {
             status = "ok",
             utc = DateTime.UtcNow,

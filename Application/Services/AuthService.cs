@@ -130,7 +130,7 @@ IConfiguration configuration) : IAuthService
     {
         var user = await userService.GetByEmailAsync(registerRequest.Email, cancellationToken);
 
-        if (user != null) throw new InvalidOperationException("Email is already taken");
+        if (user != null) throw new ConflictException("Email is already taken");
 
         var newUser = await userService.FindOrCreateAsync(registerRequest, cancellationToken);
 
@@ -167,7 +167,7 @@ IConfiguration configuration) : IAuthService
     public async Task ResetPasswordAsync(ResetPasswordRequest resetPasswordRequest, CancellationToken cancellationToken = default)
     {
         var user = await userService.GetByEmailAsync(resetPasswordRequest.Email, cancellationToken)
-            ?? throw new UserNotFoundException($"User with email {resetPasswordRequest.Email} not found");
+            ?? throw new ResourceNotFoundException($"User with email '{resetPasswordRequest.Email}' was not found.");
 
         var isValidOtp = await otpService.VerifyOtpAsync(
             resetPasswordRequest.Email,
@@ -268,17 +268,17 @@ IConfiguration configuration) : IAuthService
 
         if (user == null)
         {
-            throw new UserNotFoundException($"User with email {resendOtpRequest.Email} not found");
+            throw new ResourceNotFoundException($"User with email '{resendOtpRequest.Email}' was not found.");
         }
 
         if (resendOtpRequest.OtpType == OtpType.EmailVerification && user.IsEmailVerified)
         {
-            throw new InvalidOperationException("Email is already verified");
+            throw new ConflictException("Email is already verified");
         }
 
         if (user.Id == null)
         {
-            throw new InvalidOperationException("User ID is missing");
+            throw new BadRequestException("User ID is missing");
         }
 
         await otpService.GenerateOtpAsync(user.Id, resendOtpRequest.OtpType, user.Email, cancellationToken);

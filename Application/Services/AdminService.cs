@@ -185,7 +185,7 @@ public class AdminService(
         var currentUser = await userService.GetByIdAsync(userId, cancellationToken);
         if (currentUser == null)
         {
-            throw new InvalidOperationException($"User with ID {userId} not found");
+            throw new ResourceNotFoundException($"User with ID '{userId}' was not found.");
         }
 
         var oldSubscriptionType = currentUser.SubscriptionType;
@@ -255,7 +255,7 @@ public class AdminService(
         if (updatedUser == null)
         {
             logger.LogError("Failed to update subscription for user {UserId}", userId);
-            throw new InvalidOperationException($"User with ID {userId} not found or could not be updated");
+            throw new ResourceNotFoundException($"User with ID '{userId}' was not found or could not be updated.");
         }
 
         logger.LogInformation(
@@ -529,7 +529,7 @@ public class AdminService(
     {
         var user = await userService.GetByIdAsync(userId, cancellationToken);
         if (user == null)
-            throw new InvalidOperationException($"User with ID {userId} not found");
+            throw new ResourceNotFoundException($"User with ID '{userId}' was not found.");
 
         return new AdminUserAiQuotaDto
         {
@@ -561,7 +561,7 @@ public class AdminService(
             cancellationToken);
 
         if (updatedUser == null)
-            throw new InvalidOperationException($"User with ID {userId} not found");
+            throw new ResourceNotFoundException($"User with ID '{userId}' was not found.");
 
         return new AdminUserAiQuotaDto
         {
@@ -596,7 +596,7 @@ public class AdminService(
             cancellationToken);
 
         if (updatedUser == null)
-            throw new InvalidOperationException($"User with ID {userId} not found");
+            throw new ResourceNotFoundException($"User with ID '{userId}' was not found.");
 
         return new AdminUserAiQuotaDto
         {
