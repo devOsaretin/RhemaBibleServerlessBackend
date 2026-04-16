@@ -13,7 +13,6 @@
           "Domain": "1.0.0",
           "Microsoft.IdentityModel.Protocols.OpenIdConnect": "8.15.0",
           "Microsoft.IdentityModel.Tokens": "8.15.0",
-          "MongoDB.Driver": "3.4.0",
           "Shared": "1.0.0",
           "System.IdentityModel.Tokens.Jwt": "8.15.0"
         },

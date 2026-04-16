@@ -1,6 +1,6 @@
 using MongoDB.Driver;
 
-namespace RhemaBibleAppServerless.Application.Persistence;
+namespace RhemaBibleAppServerless.Infrastructure.Persistence;
 
 public interface IMongoDbService
 {

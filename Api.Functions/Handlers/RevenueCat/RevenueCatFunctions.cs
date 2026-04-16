@@ -8,7 +8,7 @@ using System.Globalization;
 
 public class RevenueCatFunctions(
   IAdminService adminService,
-  IUserService userService,
+  IUserApplicationService userService,
   IWebHookService webHookService,
   IOptions<RevenueCatSettings> revenueCatSettings,
   ILogger<RevenueCatFunctions> logger)

@@ -5,7 +5,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 public class UserFunctions(
-  IUserService userService,
+  IUserApplicationService userService,
   IAiQuotaService aiQuotaService,
   IFunctionTokenValidator tokenValidator,
   ICurrentPrincipalAccessor principalAccessor,

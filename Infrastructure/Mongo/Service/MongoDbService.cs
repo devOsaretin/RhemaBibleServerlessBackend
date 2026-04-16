@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Options;
 using MongoDB.Driver;
-using RhemaBibleAppServerless.Application.Persistence;
+using RhemaBibleAppServerless.Infrastructure.Persistence;
 
 namespace RhemaBibleAppServerless.Infrastructure.Mongo;
 

@@ -1,7 +1,7 @@
 using MongoDB.Bson;
 using MongoDB.Driver;
 
-namespace RhemaBibleAppServerless.Application.Services.Maintenance;
+namespace RhemaBibleAppServerless.Infrastructure.Services.Maintenance;
 
 public sealed class LegacySubscriptionDataMigrationRunner(
   IMongoDbService mongoDbService,

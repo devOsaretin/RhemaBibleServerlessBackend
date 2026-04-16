@@ -1,9 +1,9 @@
 using System.Security.Claims;
 
-public class CurrentUserService(ICurrentPrincipalAccessor principalAccessor, IUserService userService) : ICurrentUserService
+public class CurrentUserService(ICurrentPrincipalAccessor principalAccessor, IUserApplicationService userService) : ICurrentUserService
 {
   private readonly ICurrentPrincipalAccessor _principalAccessor = principalAccessor;
-  private readonly IUserService _userService = userService;
+  private readonly IUserApplicationService _userService = userService;
 
   public string GetCurrentUserId()
   {
