@@ -21,3 +21,6 @@
 /Users/osaretin/Documents/DesktopOrganizer/Desktop/devProjects/RhemaBibleProject/RhemaBibleAppServerless/Infrastructure/obj/Debug/net8.0/Infrastructure.pdb
 /Users/osaretin/Documents/DesktopOrganizer/Desktop/devProjects/RhemaBibleProject/RhemaBibleAppServerless/Infrastructure/obj/Debug/net8.0/ref/Infrastructure.dll
 /Users/osaretin/Documents/DesktopOrganizer/Desktop/devProjects/RhemaBibleProject/RhemaBibleAppServerless/Infrastructure/obj/Debug/net8.0/Infrastructure.sourcelink.json
+/Users/osaretin/Documents/DesktopOrganizer/Desktop/devProjects/RhemaBibleProject/RhemaBibleAppServerless/Infrastructure/bin/Debug/net8.0/Infrastructure.runtimeconfig.json
+/Users/osaretin/Documents/DesktopOrganizer/Desktop/devProjects/RhemaBibleProject/RhemaBibleAppServerless/Infrastructure/obj/Debug/net8.0/Infrastructure.genruntimeconfig.cache
+/Users/osaretin/Documents/DesktopOrganizer/Desktop/devProjects/RhemaBibleProject/RhemaBibleAppServerless/Api.Functions/bin/output/Infrastructure.runtimeconfig.json

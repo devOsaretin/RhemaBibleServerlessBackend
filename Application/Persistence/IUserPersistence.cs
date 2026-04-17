@@ -1,6 +1,5 @@
 namespace RhemaBibleAppServerless.Application.Persistence;
 
-/// <summary>Mongo-backed user document access. Implementations live in Infrastructure.</summary>
 public interface IUserPersistence
 {
   Task<List<User>> GetAllAsync(CancellationToken cancellationToken = default);

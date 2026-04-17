@@ -1,39 +1,26 @@
-using MongoDB.Bson;
-using MongoDB.Bson.Serialization.Attributes;
 using RhemaBibleAppServerless.Domain.Enums;
 
 namespace RhemaBibleAppServerless.Domain.Models;
 
 public class OtpCode
 {
-    [BsonId]
-    [BsonRepresentation(BsonType.ObjectId)]
-    public string? Id { get; set; }
+  public string? Id { get; set; }
 
-    [BsonElement("userId")]
-    public string UserId { get; set; } = string.Empty;
+  public string UserId { get; set; } = string.Empty;
 
-    [BsonElement("code")]
-    public string Code { get; set; } = string.Empty;
+  public string Code { get; set; } = string.Empty;
 
-    [BsonElement("otpType")]
-    public OtpType Type { get; set; }
+  public OtpType Type { get; set; }
 
-    [BsonElement("expiresAt")]
-    public DateTime ExpiresAt { get; set; }
+  public DateTime ExpiresAt { get; set; }
 
-    [BsonElement("isUsed")]
-    public bool IsUsed { get; set; } = false;
+  public bool IsUsed { get; set; }
 
-    [BsonElement("usedAt")]
-    public DateTime? UsedAt { get; set; }
+  public DateTime? UsedAt { get; set; }
 
-    [BsonElement("attempts")]
-    public int Attempts { get; set; } = 0;
+  public int Attempts { get; set; }
 
-    [BsonElement("email")]
-    public required string Email { get; set; }
+  public required string Email { get; set; }
 
-    [BsonElement("isValid")]
-    public bool IsValid => !IsUsed && ExpiresAt > DateTime.UtcNow && Attempts < 5;
+  public bool IsValid => !IsUsed && ExpiresAt > DateTime.UtcNow && Attempts < 5;
 }

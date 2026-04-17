@@ -1,17 +1,12 @@
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using RhemaBibleAppServerless.Infrastructure.Mongo;
+using RhemaBibleAppServerless.Infrastructure.Services.Maintenance;
 
-/// <summary>
-/// Replaces hosted background jobs with timer-triggered Functions (serverless-friendly).
-/// </summary>
 public sealed class MaintenanceTimerFunctions(
   IServiceScopeFactory scopeFactory,
-  MongoIndexInitializer mongoIndexInitializer,
   ILogger<MaintenanceTimerFunctions> logger)
 {
-  
   [Function("Timer_SubscriptionExpiration")]
   public async Task RunSubscriptionExpirationAsync(
     [TimerTrigger("0 0 * * * *")] TimerInfo timerInfo,
@@ -33,22 +28,21 @@ public sealed class MaintenanceTimerFunctions(
     }
   }
 
-  
-  [Function("Timer_MongoIndexes")]
-  public async Task RunMongoIndexesAsync(
+  [Function("Timer_DatabaseMaintenance")]
+  public async Task RunDatabaseMaintenanceAsync(
     [TimerTrigger("0 0 */6 * * *")] TimerInfo timerInfo,
     CancellationToken cancellationToken)
   {
     try
     {
-      await mongoIndexInitializer.EnsureIndexesAsync(cancellationToken);
+      using var scope = scopeFactory.CreateScope();
+      var maintenance = scope.ServiceProvider.GetRequiredService<PostgresMaintenanceService>();
+      await maintenance.RunAsync(cancellationToken);
     }
     catch (Exception ex)
     {
-      logger.LogError(ex, "Timer: Mongo index maintenance failed");
+      logger.LogError(ex, "Timer: PostgreSQL maintenance failed");
       throw;
     }
   }
-
-  
 }
