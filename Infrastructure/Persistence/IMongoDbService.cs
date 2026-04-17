@@ -1,5 +1,7 @@
 using MongoDB.Driver;
 
+namespace RhemaBibleAppServerless.Infrastructure.Persistence;
+
 public interface IMongoDbService
 {
   IMongoCollection<User> Users { get; }
@@ -9,4 +11,3 @@ public interface IMongoDbService
   IMongoCollection<OtpCode> OtpCode { get; }
   IMongoCollection<ProcessedWebhook> ProcessedWebhook { get; }
 }
-

@@ -1,8 +1,17 @@
+using System.Net;
 using System.Text.Json;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Functions.Worker;
-public class AiFunctions(IAIClient aiClient, IAiQuotaService aiQuotaService, IFunctionTokenValidator tokenValidator)
+using Microsoft.Azure.Functions.Worker.Http;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+
+public class AiFunctions(
+  IAIClient aiClient,
+  IAiQuotaService aiQuotaService,
+  IFunctionTokenValidator tokenValidator,
+  ICurrentPrincipalAccessor principalAccessor,
+  ILogger<AiFunctions> logger,
+  IHostEnvironment env)
 {
   private static readonly JsonSerializerOptions StreamJsonOptions = new()
   {
@@ -10,127 +19,182 @@ public class AiFunctions(IAIClient aiClient, IAiQuotaService aiQuotaService, IFu
   };
 
   [Function("AI_QueryAiService")]
-  public async Task<IActionResult> QueryAiService(
-    [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "v1/ai/query-ai-service")] HttpRequest req,
+  public async Task<HttpResponseData> QueryAiService(
+    [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "v1/ai/query-ai-service")] HttpRequestData req,
     CancellationToken cancellationToken)
   {
     try
     {
-      req.RequireLocalJwtUser(tokenValidator);
-      var query = await req.ReadRequiredJsonAsync<ChatRequest>(cancellationToken);
-      var result = await aiClient.GenerateAsync(query.Prompt, cancellationToken);
-      return new OkObjectResult(new { data = result.Data, aiUsage = result.AiUsage });
+      return await FunctionExecutionHelper.ExecuteWithAuthAsync(
+        req,
+        async (_, ct) =>
+        {
+          var query = await req.ReadRequiredJsonAsync<ChatRequest>(ct);
+          var result = await aiClient.GenerateAsync(query.Prompt, ct);
+          return await req.CreateJsonResponse(HttpStatusCode.OK, new { data = result.Data, aiUsage = result.AiUsage });
+        },
+        tokenValidator,
+        principalAccessor,
+        cancellationToken,
+        logger,
+        env);
     }
     catch (AiMonthlyQuotaExceededException ex)
     {
-      return new ObjectResult(QuotaExceededBody(ex))
-      {
-        StatusCode = StatusCodes.Status429TooManyRequests
-      };
+      return await req.CreateJsonResponse(HttpStatusCode.TooManyRequests, QuotaExceededBody(ex));
     }
   }
 
   [Function("AI_Prayer")]
-  public async Task<IActionResult> Prayer(
-    [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "v1/ai/prayer")] HttpRequest req,
+  public async Task<HttpResponseData> Prayer(
+    [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "v1/ai/prayer")] HttpRequestData req,
     CancellationToken cancellationToken)
   {
     try
     {
-      req.RequireLocalJwtUser(tokenValidator);
-      var query = await req.ReadRequiredJsonAsync<ChatRequest>(cancellationToken);
-      var result = await aiClient.GeneratePrayerAsync(query.Prompt, cancellationToken);
-      return new OkObjectResult(new { data = result.Data, aiUsage = result.AiUsage });
+      return await FunctionExecutionHelper.ExecuteWithAuthAsync(
+        req,
+        async (_, ct) =>
+        {
+          var query = await req.ReadRequiredJsonAsync<ChatRequest>(ct);
+          var result = await aiClient.GeneratePrayerAsync(query.Prompt, ct);
+          return await req.CreateJsonResponse(HttpStatusCode.OK, new { data = result.Data, aiUsage = result.AiUsage });
+        },
+        tokenValidator,
+        principalAccessor,
+        cancellationToken,
+        logger,
+        env);
     }
     catch (AiMonthlyQuotaExceededException ex)
     {
-      return new ObjectResult(QuotaExceededBody(ex))
-      {
-        StatusCode = StatusCodes.Status429TooManyRequests
-      };
+      return await req.CreateJsonResponse(HttpStatusCode.TooManyRequests, QuotaExceededBody(ex));
     }
   }
 
   [Function("AI_Chat")]
-  public async Task<IActionResult> Chat(
-    [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "v1/ai/chat")] HttpRequest req,
+  public async Task<HttpResponseData> Chat(
+    [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "v1/ai/chat")] HttpRequestData req,
     CancellationToken cancellationToken)
   {
     try
     {
-      req.RequireLocalJwtUser(tokenValidator);
-      var query = await req.ReadRequiredJsonAsync<ChatRequest>(cancellationToken);
-      var result = await aiClient.GenerateChatAsync(query.Prompt, cancellationToken);
-      return new OkObjectResult(new { data = result.Data, aiUsage = result.AiUsage });
+      return await FunctionExecutionHelper.ExecuteWithAuthAsync(
+        req,
+        async (_, ct) =>
+        {
+          var query = await req.ReadRequiredJsonAsync<ChatRequest>(ct);
+          var result = await aiClient.GenerateChatAsync(query.Prompt, ct);
+          return await req.CreateJsonResponse(HttpStatusCode.OK, new { data = result.Data, aiUsage = result.AiUsage });
+        },
+        tokenValidator,
+        principalAccessor,
+        cancellationToken,
+        logger,
+        env);
     }
     catch (AiMonthlyQuotaExceededException ex)
     {
-      return new ObjectResult(QuotaExceededBody(ex))
-      {
-        StatusCode = StatusCodes.Status429TooManyRequests
-      };
+      return await req.CreateJsonResponse(HttpStatusCode.TooManyRequests, QuotaExceededBody(ex));
     }
   }
 
   [Function("AI_QueryAiServiceStream")]
-  public async Task QueryAiServiceStream(
-    [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "v1/ai/query-ai-service/stream")] HttpRequest req,
+  public async Task<HttpResponseData> QueryAiServiceStream(
+    [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "v1/ai/query-ai-service/stream")] HttpRequestData req,
     CancellationToken cancellationToken)
   {
     try
     {
-      req.RequireLocalJwtUser(tokenValidator);
-      var query = await req.ReadRequiredJsonAsync<ChatRequest>(cancellationToken);
-      await WriteSseStreamAsync(req, aiClient.StreamGenerateAsync(query.Prompt, cancellationToken), cancellationToken);
+      return await FunctionExecutionHelper.ExecuteWithAuthAsync(
+        req,
+        async (_, ct) =>
+        {
+          var query = await req.ReadRequiredJsonAsync<ChatRequest>(ct);
+          var res = CreateSseResponse(req);
+          await WriteSseStreamAsync(res, aiClient.StreamGenerateAsync(query.Prompt, ct), ct);
+          return res;
+        },
+        tokenValidator,
+        principalAccessor,
+        cancellationToken,
+        logger,
+        env);
     }
     catch (AiMonthlyQuotaExceededException ex)
     {
-      await WriteQuotaExceededIfPossibleAsync(req, ex, cancellationToken);
+      return await req.CreateJsonResponse(HttpStatusCode.TooManyRequests, QuotaExceededBody(ex));
     }
   }
 
   [Function("AI_PrayerStream")]
-  public async Task PrayerStream(
-    [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "v1/ai/prayer/stream")] HttpRequest req,
+  public async Task<HttpResponseData> PrayerStream(
+    [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "v1/ai/prayer/stream")] HttpRequestData req,
     CancellationToken cancellationToken)
   {
     try
     {
-      req.RequireLocalJwtUser(tokenValidator);
-      var query = await req.ReadRequiredJsonAsync<ChatRequest>(cancellationToken);
-      await WriteSseStreamAsync(req, aiClient.StreamGeneratePrayerAsync(query.Prompt, cancellationToken), cancellationToken);
+      return await FunctionExecutionHelper.ExecuteWithAuthAsync(
+        req,
+        async (_, ct) =>
+        {
+          var query = await req.ReadRequiredJsonAsync<ChatRequest>(ct);
+          var res = CreateSseResponse(req);
+          await WriteSseStreamAsync(res, aiClient.StreamGeneratePrayerAsync(query.Prompt, ct), ct);
+          return res;
+        },
+        tokenValidator,
+        principalAccessor,
+        cancellationToken,
+        logger,
+        env);
     }
     catch (AiMonthlyQuotaExceededException ex)
     {
-      await WriteQuotaExceededIfPossibleAsync(req, ex, cancellationToken);
+      return await req.CreateJsonResponse(HttpStatusCode.TooManyRequests, QuotaExceededBody(ex));
     }
   }
 
   [Function("AI_ChatStream")]
-  public async Task ChatStream(
-    [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "v1/ai/chat/stream")] HttpRequest req,
+  public async Task<HttpResponseData> ChatStream(
+    [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "v1/ai/chat/stream")] HttpRequestData req,
     CancellationToken cancellationToken)
   {
     try
     {
-      req.RequireLocalJwtUser(tokenValidator);
-      var query = await req.ReadRequiredJsonAsync<ChatRequest>(cancellationToken);
-      await WriteSseStreamAsync(req, aiClient.StreamGenerateChatAsync(query.Prompt, cancellationToken), cancellationToken);
+      return await FunctionExecutionHelper.ExecuteWithAuthAsync(
+        req,
+        async (_, ct) =>
+        {
+          var query = await req.ReadRequiredJsonAsync<ChatRequest>(ct);
+          var res = CreateSseResponse(req);
+          await WriteSseStreamAsync(res, aiClient.StreamGenerateChatAsync(query.Prompt, ct), ct);
+          return res;
+        },
+        tokenValidator,
+        principalAccessor,
+        cancellationToken,
+        logger,
+        env);
     }
     catch (AiMonthlyQuotaExceededException ex)
     {
-      await WriteQuotaExceededIfPossibleAsync(req, ex, cancellationToken);
+      return await req.CreateJsonResponse(HttpStatusCode.TooManyRequests, QuotaExceededBody(ex));
     }
   }
 
-  private static async Task WriteSseStreamAsync(HttpRequest req, IAsyncEnumerable<AiStreamPart> parts, CancellationToken cancellationToken)
+  private static HttpResponseData CreateSseResponse(HttpRequestData req)
   {
-    var response = req.HttpContext.Response;
-    response.ContentType = "text/event-stream; charset=utf-8";
-    response.Headers.CacheControl = "no-cache";
-    response.Headers.Connection = "keep-alive";
-    response.Headers.Append("X-Accel-Buffering", "no");
+    var res = req.CreateResponse(HttpStatusCode.OK);
+    res.Headers.Add("Content-Type", "text/event-stream; charset=utf-8");
+    res.Headers.Add("Cache-Control", "no-cache");
+    res.Headers.Add("Connection", "keep-alive");
+    res.Headers.Add("X-Accel-Buffering", "no");
+    return res;
+  }
 
+  private static async Task WriteSseStreamAsync(HttpResponseData response, IAsyncEnumerable<AiStreamPart> parts, CancellationToken cancellationToken)
+  {
     await foreach (var part in parts.WithCancellation(cancellationToken))
     {
       var payloadJson = part switch
@@ -141,21 +205,13 @@ public class AiFunctions(IAIClient aiClient, IAiQuotaService aiQuotaService, IFu
         _ => throw new InvalidOperationException($"Unknown stream part: {part.GetType().Name}")
       };
 
-      await response.WriteAsync($"data: {payloadJson}\n\n", cancellationToken);
+      await response.WriteStringAsync($"data: {payloadJson}\n\n", cancellationToken);
       await response.Body.FlushAsync(cancellationToken);
     }
   }
 
-  private async Task WriteQuotaExceededIfPossibleAsync(HttpRequest req, AiMonthlyQuotaExceededException ex, CancellationToken cancellationToken)
-  {
-    var response = req.HttpContext.Response;
-    if (response.HasStarted)
-      throw ex;
-
-    response.ContentType = "application/json; charset=utf-8";
-    response.StatusCode = StatusCodes.Status429TooManyRequests;
-    await response.WriteAsJsonAsync(QuotaExceededBody(ex), StreamJsonOptions, cancellationToken);
-  }
+  // Note: for streaming endpoints, quota errors can occur before streaming starts.
+  // We return a normal JSON 429 in that case.
 
   private object QuotaExceededBody(AiMonthlyQuotaExceededException ex) => new
   {

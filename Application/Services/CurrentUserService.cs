@@ -1,14 +1,14 @@
 using System.Security.Claims;
 
-public class CurrentUserService(IHttpContextAccessor httpContextAccessor, IUserService userService) : ICurrentUserService
+public class CurrentUserService(ICurrentPrincipalAccessor principalAccessor, IUserApplicationService userService) : ICurrentUserService
 {
-  private readonly IHttpContextAccessor _httpContextAccessor = httpContextAccessor;
-  private readonly IUserService _userService = userService;
+  private readonly ICurrentPrincipalAccessor _principalAccessor = principalAccessor;
+  private readonly IUserApplicationService _userService = userService;
 
   public string GetCurrentUserId()
   {
-    var context = _httpContextAccessor.HttpContext;
-    var authId = context?.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+    var user = _principalAccessor.Principal;
+    var authId = user?.GetAuthenticatedUserId();
 
     return authId ?? throw new UnauthorizedAccessException("UserId not found");
   }

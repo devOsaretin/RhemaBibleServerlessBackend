@@ -20,3 +20,4 @@
 /Users/osaretin/Documents/DesktopOrganizer/Desktop/devProjects/RhemaBibleProject/RhemaBibleAppServerless/Infrastructure/obj/Debug/net8.0/refint/Infrastructure.dll
 /Users/osaretin/Documents/DesktopOrganizer/Desktop/devProjects/RhemaBibleProject/RhemaBibleAppServerless/Infrastructure/obj/Debug/net8.0/Infrastructure.pdb
 /Users/osaretin/Documents/DesktopOrganizer/Desktop/devProjects/RhemaBibleProject/RhemaBibleAppServerless/Infrastructure/obj/Debug/net8.0/ref/Infrastructure.dll
+/Users/osaretin/Documents/DesktopOrganizer/Desktop/devProjects/RhemaBibleProject/RhemaBibleAppServerless/Infrastructure/obj/Debug/net8.0/Infrastructure.sourcelink.json

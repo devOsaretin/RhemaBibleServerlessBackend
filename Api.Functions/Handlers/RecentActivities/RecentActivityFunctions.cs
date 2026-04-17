@@ -1,33 +1,36 @@
 using System.Security.Claims;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc;
+using System.Net;
 using Microsoft.Azure.Functions.Worker;
+using Microsoft.Azure.Functions.Worker.Http;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using RhemaBibleAppServerless.Domain.Models;
 
-public class RecentActivityFunctions(IRecentActivityService recentActivityService, IFunctionTokenValidator tokenValidator, IHostEnvironment env, ILogger<RecentActivityFunctions> logger)
+public class RecentActivityFunctions(
+  IRecentActivityService recentActivityService,
+  IFunctionTokenValidator tokenValidator,
+  ICurrentPrincipalAccessor principalAccessor,
+  IHostEnvironment env,
+  ILogger<RecentActivityFunctions> logger)
 {
   [Function("RecentActivity_GetRecentActivitiesByUser")]
-  public Task<IActionResult> GetRecentActivitiesByUser(
-    [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "v1/recentactivity")] HttpRequest req,
+  public Task<HttpResponseData> GetRecentActivitiesByUser(
+    [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "v1/recentactivity")] HttpRequestData req,
     CancellationToken cancellationToken) =>
-    FunctionExecutionHelper.ExecuteAsync(req, async ct =>
+    FunctionExecutionHelper.ExecuteWithAuthAsync(req, async (principal, ct) =>
     {
-      var principal = req.RequireLocalJwtUser(tokenValidator);
       var userId = principal.GetRequiredClaim(ClaimTypes.NameIdentifier);
 
       var activities = await recentActivityService.GetRecentActivitiesByUserAsync(userId);
-      return req.ApiResult(ApiResponse<IReadOnlyList<RecentActivity>>.SuccessResponse(activities));
-    }, cancellationToken, logger, env);
+      return await req.CreateJsonResponse(HttpStatusCode.OK, ApiResponse<IReadOnlyList<RecentActivity>>.SuccessResponse(activities));
+    }, tokenValidator, principalAccessor, cancellationToken, logger, env);
 
   [Function("RecentActivity_AddUserActivity")]
-  public Task<IActionResult> AddUserActivity(
-    [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "v1/recentactivity")] HttpRequest req,
+  public Task<HttpResponseData> AddUserActivity(
+    [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "v1/recentactivity")] HttpRequestData req,
     CancellationToken cancellationToken) =>
-    FunctionExecutionHelper.ExecuteAsync(req, async ct =>
+    FunctionExecutionHelper.ExecuteWithAuthAsync(req, async (principal, ct) =>
     {
-      var principal = req.RequireLocalJwtUser(tokenValidator);
       var userId = principal.GetRequiredClaim(ClaimTypes.NameIdentifier);
       var recentActivityDto = await req.ReadRequiredJsonAsync<AddActivityDto>(ct);
 
@@ -39,7 +42,7 @@ public class RecentActivityFunctions(IRecentActivityService recentActivityServic
       };
 
       var activity = await recentActivityService.AddActivityByUser(newActivity);
-      return req.ApiResult(ApiResponse<RecentActivity>.SuccessResponse(activity));
-    }, cancellationToken, logger, env);
+      return await req.CreateJsonResponse(HttpStatusCode.OK, ApiResponse<RecentActivity>.SuccessResponse(activity));
+    }, tokenValidator, principalAccessor, cancellationToken, logger, env);
 }
 

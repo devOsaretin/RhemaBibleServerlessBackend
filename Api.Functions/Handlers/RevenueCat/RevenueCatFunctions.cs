@@ -1,5 +1,5 @@
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc;
+using System.Net;
+using Microsoft.Azure.Functions.Worker.Http;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -8,7 +8,7 @@ using System.Globalization;
 
 public class RevenueCatFunctions(
   IAdminService adminService,
-  IUserService userService,
+  IUserApplicationService userService,
   IWebHookService webHookService,
   IOptions<RevenueCatSettings> revenueCatSettings,
   ILogger<RevenueCatFunctions> logger)
@@ -16,21 +16,21 @@ public class RevenueCatFunctions(
   private readonly RevenueCatSettings _revenueCatSettings = revenueCatSettings.Value;
 
   [Function("RevenueCat_Webhook")]
-  public async Task<IActionResult> HandleWebhook(
-    [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "revenuecat/webhook")] HttpRequest req,
+  public async Task<HttpResponseData> HandleWebhook(
+    [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "revenuecat/webhook")] HttpRequestData req,
     CancellationToken cancellationToken)
   {
     try
     {
-      var authHeader = req.Headers.Authorization.FirstOrDefault();
+      var authHeader = req.Headers.TryGetValues("Authorization", out var values) ? values.FirstOrDefault() : null;
       if (!IsAuthorized(authHeader!))
-        return new UnauthorizedResult();
+        return req.CreateResponse(HttpStatusCode.Unauthorized);
 
       var webhookEvent = await req.ReadRequiredJsonAsync<RevenueCatWebHookEvent>(cancellationToken);
       if (webhookEvent?.Event == null)
       {
         logger.LogWarning("Received webhook with null event");
-        return new BadRequestObjectResult("Invalid webhook payload");
+        return await req.CreateJsonResponse(HttpStatusCode.BadRequest, new { message = "Invalid webhook payload" });
       }
 
       var eventData = webhookEvent.Event;
@@ -39,7 +39,7 @@ public class RevenueCatFunctions(
       if (string.IsNullOrEmpty(appUserId))
       {
         logger.LogWarning("Received webhook with null app_user_id");
-        return new BadRequestObjectResult("app_user_id is required");
+        return await req.CreateJsonResponse(HttpStatusCode.BadRequest, new { message = "app_user_id is required" });
       }
 
       logger.LogInformation(
@@ -48,18 +48,24 @@ public class RevenueCatFunctions(
         appUserId);
 
       if (!await webHookService.TryMarkEventProcessedAsync(eventData.Id!, cancellationToken))
-        return new OkResult();
+      {
+        logger.LogWarning("Failed to mark event as processed");
+        return req.CreateResponse(HttpStatusCode.OK);
+      }
+
 
       var user = await userService.GetByIdAsync(appUserId, cancellationToken);
       if (user == null)
       {
         logger.LogWarning("User not found for app_user_id: {AppUserId}", appUserId);
-        return new OkResult();
+        return req.CreateResponse(HttpStatusCode.OK);
       }
 
       var expiresAt = FromUnixMs(eventData.ExpirationAtMs);
       var isActive = expiresAt == null || expiresAt > DateTime.UtcNow;
       var newSubscriptionType = isActive ? MapProduct(eventData.ProductId) : SubscriptionType.Free;
+
+
 
       if (user.SubscriptionType != newSubscriptionType || user.SubscriptionExpiresAt != expiresAt)
       {
@@ -75,12 +81,13 @@ public class RevenueCatFunctions(
           user.Id, newSubscriptionType, expiresAt);
       }
 
-      return new OkResult();
+
+      return req.CreateResponse(HttpStatusCode.OK);
     }
     catch (Exception ex)
     {
       logger.LogError(ex, "Error processing RevenueCat webhook");
-      return new OkResult();
+      return req.CreateResponse(HttpStatusCode.OK);
     }
   }
 

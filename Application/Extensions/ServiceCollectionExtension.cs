@@ -18,11 +18,7 @@ public static class ClerkAuthenticationExtensions
   }
 }
 
-public interface IFunctionTokenValidator
-{
-  ClaimsPrincipal ValidateLocalJwt(string token);
-  Task<ClaimsPrincipal> ValidateClerkJwtAsync(string token, CancellationToken cancellationToken = default);
-}
+
 
 internal sealed class FunctionTokenValidator : IFunctionTokenValidator
 {
@@ -76,9 +72,16 @@ internal sealed class FunctionTokenValidator : IFunctionTokenValidator
 
   public ClaimsPrincipal ValidateLocalJwt(string token)
   {
-    var principal = _handler.ValidateToken(token, _localJwtValidationParameters, out _);
-    NormalizeClaims(principal);
-    return principal;
+    try
+    {
+      var principal = _handler.ValidateToken(token, _localJwtValidationParameters, out _);
+      NormalizeClaims(principal);
+      return principal;
+    }
+    catch (ArgumentException ex)
+    {
+      throw new SecurityTokenMalformedException("Invalid token", ex);
+    }
   }
 
   public async Task<ClaimsPrincipal> ValidateClerkJwtAsync(string token, CancellationToken cancellationToken = default)
