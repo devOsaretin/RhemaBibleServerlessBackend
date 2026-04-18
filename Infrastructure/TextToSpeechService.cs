@@ -13,6 +13,8 @@ using Azure.Storage.Sas;
 using Azure.Storage;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
+using RhemaBibleAppServerless.Domain.Models;
+using Microsoft.Extensions.Logging;
 
 
 

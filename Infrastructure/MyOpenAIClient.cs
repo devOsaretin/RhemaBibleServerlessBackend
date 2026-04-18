@@ -5,6 +5,8 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
+using RhemaBibleAppServerless.Domain.Enums;
+using RhemaBibleAppServerless.Domain.Models;
 
 public class OpenAIChatMessage
 {
