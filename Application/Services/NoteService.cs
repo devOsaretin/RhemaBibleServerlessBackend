@@ -1,9 +1,8 @@
 using Microsoft.Extensions.Caching.Memory;
-using RhemaBibleAppServerless.Application.Persistence;
 
 public class NoteService(
   INoteRepository notes,
-  IRecentActivityService recentActivityService,
+  IServiceBusService serviceBusService,
   IMemoryCache memoryCache,
   IUserResourceEpochStore epochStore) : INoteService
 {
@@ -12,25 +11,14 @@ public class NoteService(
     await notes.InsertAsync(note, CancellationToken.None);
     epochStore.BumpNotes(note.AuthId);
 
-    _ = Task.Run(async () =>
+    var activity = new AddActivityToQueueDto
     {
-      try
-      {
-        var activity = new RecentActivity
-        {
-          AuthId = note.AuthId,
-          ActivityType = ActivityType.AddNote,
-          Title = $"Added note to {note.Reference}"
-        };
+      AuthId = note.AuthId,
+      ActivityType = ActivityType.AddNote.ToString(),
+      Title = $"Added note to {note.Reference}"
+    };
 
-        await recentActivityService.AddActivityByUser(activity);
-
-      }
-      catch (Exception ex)
-      {
-        Console.WriteLine($"[Warning] Failed to log activity: {ex.Message}");
-      }
-    });
+    await serviceBusService.PublishAsync(activity, QueueNames.Activity);
 
     return note;
   }

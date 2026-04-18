@@ -1,6 +1,7 @@
 using System.Net.Http.Headers;
 using Amazon;
 using Amazon.Polly;
+using Azure.Messaging.ServiceBus;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
@@ -19,6 +20,7 @@ public static class InfrastructureServiceCollectionExtensions
     services.Configure<PostgresOptions>(config.GetSection(PostgresOptions.SectionName));
     services.Configure<RevenueCatSettings>(config.GetSection("RevenueCat"));
     services.Configure<ClerkSettings>(config.GetSection("Clerk"));
+    services.Configure<ServiceBusSettings>(config.GetSection(ServiceBusSettings.SectionName));
     services.Configure<ElevenLabsTtsOptions>(config.GetSection(ElevenLabsTtsOptions.SectionName));
     services.Configure<AzureBlobTtsOptions>(config.GetSection(AzureBlobTtsOptions.SectionName));
     services.Configure<TextToSpeechRoutingOptions>(config.GetSection(TextToSpeechRoutingOptions.SectionName));
@@ -45,6 +47,18 @@ public static class InfrastructureServiceCollectionExtensions
         .UseSnakeCaseNamingConvention();
     });
 
+    services.AddSingleton((sp) =>
+    {
+      var settings = sp.GetRequiredService<IOptions<ServiceBusSettings>>().Value;
+      if (!string.IsNullOrEmpty(settings.ConnectionString))
+      {
+        return new ServiceBusClient(settings.ConnectionString);
+      }
+
+      throw new InvalidOperationException("ServiceBus configuration missing.");
+    });
+
+    services.AddScoped<IServiceBusService, ServiceBusService>();
     services.AddScoped<IUserPersistence, EfUserPersistence>();
     services.AddScoped<INoteRepository, EfNoteRepository>();
     services.AddScoped<ISavedVerseRepository, EfSavedVerseRepository>();
@@ -69,6 +83,8 @@ public static class InfrastructureServiceCollectionExtensions
     services.AddScoped<IWebHookService, WebhookService>();
     services.AddScoped<IEmailProvider, SmtpService>();
     services.AddScoped<INotificationService, EmailNotificationService>();
+
+    
 
     return services;
   }

@@ -35,7 +35,7 @@ public class MyOpenAIClient : IAIClient
 
     private readonly HttpClient _httpClient;
     private readonly ICurrentUserService _currentUserService;
-    private readonly IRecentActivityService _recentActivityService;
+    private readonly IServiceBusService _serviceBusService;
     private readonly IAiQuotaService _aiQuotaService;
     private readonly IPromptFileReader _promptFiles;
     private readonly IMemoryCache _memoryCache;
@@ -44,7 +44,7 @@ public class MyOpenAIClient : IAIClient
 
     public MyOpenAIClient(
         ICurrentUserService currentUserService,
-        IRecentActivityService recentActivityService,
+        IServiceBusService serviceBusService,
         IAiQuotaService aiQuotaService,
         IPromptFileReader promptFiles,
         IMemoryCache memoryCache,
@@ -55,7 +55,7 @@ public class MyOpenAIClient : IAIClient
         _currentUserService = currentUserService;
         _httpClient = httpClient;
         _model = model;
-        _recentActivityService = recentActivityService;
+        _serviceBusService = serviceBusService;
         _aiQuotaService = aiQuotaService;
         _promptFiles = promptFiles;
         _memoryCache = memoryCache;
@@ -97,7 +97,7 @@ public class MyOpenAIClient : IAIClient
             throw new InvalidOperationException($"OpenAI API call failed: {response.StatusCode}, {body}");
         }
 
-        _ = LogActivityFireAndForget(currentUser.Id!, query);
+        await LogActivity(currentUser.Id!, query);
 
         var json = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: cancellationToken);
         var data = ParseChoicesContent(json, fallbackPropertyName: "text");
@@ -229,7 +229,7 @@ public class MyOpenAIClient : IAIClient
             throw new InvalidOperationException($"OpenAI API call failed: {response.StatusCode}, {body}");
         }
 
-        _ = LogActivityFireAndForget(userId, userQuery);
+        await LogActivity(userId, userQuery);
 
         await using var responseStream = await response.Content.ReadAsStreamAsync(cancellationToken);
 
@@ -397,25 +397,14 @@ public class MyOpenAIClient : IAIClient
         throw new InvalidOperationException("Unexpected OpenAI response structure: " + json);
     }
 
-    private Task LogActivityFireAndForget(string userId, string query)
+    private async Task LogActivity(string userId, string query)
     {
-        return Task.Run(async () =>
+        var activity = new AddActivityToQueueDto
         {
-            try
-            {
-                var activity = new RecentActivity
-                {
-                    AuthId = userId,
-                    ActivityType = ActivityType.AIAnalysis,
-                    Title = $"AI Analysis: {query}"
-                };
-
-                await _recentActivityService.AddActivityByUser(activity);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[Warning] Failed to log activity: {ex.Message}");
-            }
-        });
+            AuthId = userId,
+            ActivityType = ActivityType.AIAnalysis.ToString(),
+            Title = $"AI Analysis: {query}"
+        };
+        await _serviceBusService.PublishAsync(activity, QueueNames.Activity);
     }
 }
