@@ -24,6 +24,7 @@ public class NoteService(
         };
 
         await recentActivityService.AddActivityByUser(activity);
+
       }
       catch (Exception ex)
       {
@@ -42,10 +43,10 @@ public class NoteService(
     return deleted > 0;
   }
 
-  public Task<Note?> GetNoteAsync(string noteId) =>
-    notes.GetByIdAsync(noteId, CancellationToken.None);
+  public async Task<Note?> GetNoteAsync(string noteId) =>
+    await notes.GetByIdAsync(noteId, CancellationToken.None);
 
-  public async Task<PagedResult<Note>> GetNotesAsync(string userId, int pageNumber = 1, int pageSize = 10)
+  public async Task<PagedResult<Note>> GetNotesAsync(string userId, int pageNumber = 1, int pageSize = 20)
   {
     var epoch = epochStore.GetNotesEpoch(userId);
     var cacheKey = $"notes:v1:{userId}:{epoch}:{pageNumber}:{pageSize}";

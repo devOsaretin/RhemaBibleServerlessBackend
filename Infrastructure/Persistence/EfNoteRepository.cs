@@ -23,12 +23,17 @@ public sealed class EfNoteRepository(RhemaDbContext db) : INoteRepository
   public Task<Note?> GetByIdAsync(string noteId, CancellationToken cancellationToken = default) =>
     db.Notes.AsNoTracking().FirstOrDefaultAsync(x => x.Id == noteId, cancellationToken);
 
-  public async Task<PagedResult<Note>> GetPagedByUserAsync(string userId, int pageNumber, int pageSize, CancellationToken cancellationToken = default)
+  public async Task<PagedResult<Note>> GetPagedByUserAsync(string userId, int pageNumber = 1, int pageSize = 20, CancellationToken cancellationToken = default)
   {
+    
     var skip = (pageNumber - 1) * pageSize;
     var q = db.Notes.AsNoTracking().Where(x => x.AuthId == userId);
     var total = await q.LongCountAsync(cancellationToken);
-    var items = await q.OrderByDescending(x => x.CreatedAt).Skip(skip).Take(pageSize).ToListAsync(cancellationToken);
+    var items = await q.OrderByDescending(x => x.CreatedAt)
+    .Skip(skip)
+    .Take(pageSize)
+    .ToListAsync(cancellationToken);
+
     return new PagedResult<Note>
     {
       Items = items,
