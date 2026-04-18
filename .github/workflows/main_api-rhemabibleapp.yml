@@ -12,6 +12,8 @@ on:
 env:
   AZURE_FUNCTIONAPP_PACKAGE_PATH: '.' # set this to the path to your web app project, defaults to the repository root
   DOTNET_VERSION: '8.0' # set this to the dotnet version to use
+  DOTNET_EF_VERSION: '8.0.11' # keep in sync with Npgsql.EntityFrameworkCore.PostgreSQL / EF Core packages
+
 
 jobs:
   build-and-deploy:
@@ -25,6 +27,26 @@ jobs:
         uses: actions/setup-dotnet@v1
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      # Add repository secret POSTGRES_CONNECTION_STRING (Neon / Postgres ADO.NET connection string for QA).
+      # RhemaDbContextFactory reads RHEMA_POSTGRES_CONNECTION first.
+      - name: Install dotnet-ef
+        run: |
+          dotnet tool install --global dotnet-ef --version ${{ env.DOTNET_EF_VERSION }}
+          echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
+
+      - name: Apply EF Core database migrations
+        env:
+          RHEMA_POSTGRES_CONNECTION: ${{ secrets.POSTGRES_CONNECTION_STRING_PROD }}
+        run: |
+          if [ -z "${RHEMA_POSTGRES_CONNECTION:-}" ]; then
+            echo "::error::Repository secret POSTGRES_CONNECTION_STRING is not set. Add it under Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+          dotnet ef database update \
+            --project Infrastructure/Infrastructure.csproj \
+            --context RhemaDbContext \
+            --configuration Release
 
       - name: 'Resolve Project Dependencies Using Dotnet'
         shell: bash
