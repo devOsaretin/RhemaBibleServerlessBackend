@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using RhemaBibleAppServerless.Application.Persistence;
+using RhemaBibleAppServerless.Domain.Enums;
 using RhemaBibleAppServerless.Domain.Models;
 
 namespace RhemaBibleAppServerless.Infrastructure.Persistence;
