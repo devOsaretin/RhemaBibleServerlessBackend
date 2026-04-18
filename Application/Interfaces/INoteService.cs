@@ -7,7 +7,7 @@ public interface INoteService
 
     Task<bool> DeleteNoteAsync(string userId, string noteId);
 
-    Task<Note> GetNoteAsync(string noteId);
+    Task<Note?> GetNoteAsync(string noteId);
 
     Task<PagedResult<Note>> GetNotesAsync(string userId, int pageNumber, int pageSize);
 

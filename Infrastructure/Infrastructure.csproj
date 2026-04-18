@@ -1,6 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <ProjectReference Include="..\Domain\Domain.csproj" />
     <ProjectReference Include="..\Application\Application.csproj" />
     <PackageReference Include="AWSSDK.Polly" Version="3.7.401" />
