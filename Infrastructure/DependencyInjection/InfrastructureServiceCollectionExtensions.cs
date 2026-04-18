@@ -1,14 +1,13 @@
 using System.Net.Http.Headers;
-using Microsoft.Extensions.Caching.Memory;
 using Amazon;
 using Amazon.Polly;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using RhemaBibleAppServerless.Application.Configuration;
 using RhemaBibleAppServerless.Application.Persistence;
-using RhemaBibleAppServerless.Infrastructure.Mongo;
-using RhemaBibleAppServerless.Infrastructure.Services.Maintenance;
 using RhemaBibleAppServerless.Infrastructure.Persistence;
 
 namespace RhemaBibleAppServerless.Infrastructure.DependencyInjection;
@@ -17,10 +16,7 @@ public static class InfrastructureServiceCollectionExtensions
 {
   public static IServiceCollection AddRhemaInfrastructure(this IServiceCollection services, IConfiguration config)
   {
-    MongoEnumStringConvention.RegisterEnumStringConvention();
-
-    services.Configure<MongoDbSettings>(config.GetSection("MongoDbSettings"));
-    services.Configure<MongoIndexInitializationOptions>(config.GetSection(MongoIndexInitializationOptions.SectionName));
+    services.Configure<PostgresOptions>(config.GetSection(PostgresOptions.SectionName));
     services.Configure<RevenueCatSettings>(config.GetSection("RevenueCat"));
     services.Configure<ClerkSettings>(config.GetSection("Clerk"));
     services.Configure<ElevenLabsTtsOptions>(config.GetSection(ElevenLabsTtsOptions.SectionName));
@@ -39,18 +35,23 @@ public static class InfrastructureServiceCollectionExtensions
       return new AmazonPollyClient(region);
     });
 
-    services.AddSingleton<MongoDbService>();
-    services.AddSingleton<IMongoDbService>(sp => sp.GetRequiredService<MongoDbService>());
-    services.AddSingleton<MongoIndexInitializer>();
-    services.AddSingleton<LegacySubscriptionDataMigrationRunner>();
+    services.AddDbContext<RhemaDbContext>((sp, o) =>
+    {
+      var cs = sp.GetRequiredService<IOptions<PostgresOptions>>().Value.ConnectionString;
+      if (string.IsNullOrWhiteSpace(cs))
+        throw new InvalidOperationException("Configure Postgres:ConnectionString (Neon pooled connection string).");
 
-    services.AddScoped<IUserPersistence, MongoUserPersistence>();
-    services.AddScoped<INoteRepository, MongoNoteRepository>();
-    services.AddScoped<ISavedVerseRepository, MongoSavedVerseRepository>();
-    services.AddScoped<IRecentActivityRepository, MongoRecentActivityRepository>();
-    services.AddScoped<IOtpRepository, MongoOtpRepository>();
-    services.AddScoped<IProcessedWebhookRepository, MongoProcessedWebhookRepository>();
-    services.AddScoped<IAdminMetricsRepository, MongoAdminMetricsRepository>();
+      o.UseNpgsql(cs, n => n.EnableRetryOnFailure(5, TimeSpan.FromSeconds(2), null))
+        .UseSnakeCaseNamingConvention();
+    });
+
+    services.AddScoped<IUserPersistence, EfUserPersistence>();
+    services.AddScoped<INoteRepository, EfNoteRepository>();
+    services.AddScoped<ISavedVerseRepository, EfSavedVerseRepository>();
+    services.AddScoped<IRecentActivityRepository, EfRecentActivityRepository>();
+    services.AddScoped<IOtpRepository, EfOtpRepository>();
+    services.AddScoped<IProcessedWebhookRepository, EfProcessedWebhookRepository>();
+    services.AddScoped<IAdminMetricsRepository, EfAdminMetricsRepository>();
 
     services.AddSingleton<IPromptFileReader, CachedPromptFileReader>();
 

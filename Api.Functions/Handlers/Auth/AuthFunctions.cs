@@ -43,7 +43,12 @@ public class AuthFunctions(
     {
       var request = await req.ReadRequiredJsonAsync<EmailVerifyRequest>(ct);
       var verify = await authService.VerifyEmailAsync(request.Email, request.Otp, OtpType.EmailVerification, ct);
-      return await req.CreateJsonResponse(HttpStatusCode.OK, ApiResponse.Success(verify));
+      if (verify)
+      {
+        return await req.CreateJsonResponse(HttpStatusCode.OK, ApiResponse.Success(verify));
+      }
+      return await req.CreateJsonResponse(HttpStatusCode.BadRequest, ApiResponse.Error<string>("Invalid or expired OTP code"));
+
     }, cancellationToken, logger, env);
 
   [Function("Auth_ResendOtp")]
