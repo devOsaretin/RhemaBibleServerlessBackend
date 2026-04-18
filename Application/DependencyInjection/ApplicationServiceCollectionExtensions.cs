@@ -12,7 +12,6 @@ public static class ApplicationServiceCollectionExtensions
     services.AddScoped<IAuthService, AuthService>();
     services.AddScoped<IOtpService, OtpService>();
     services.AddScoped<IAiQuotaService, AiQuotaService>();
-    services.AddScoped<ISubscriptionExpirationService, SubscriptionExpirationService>();
     services.AddScoped<INoteService, NoteService>();
     services.AddScoped<ISavedVerseService, SavedVerseService>();
     services.AddScoped<IRecentActivityService, RecentActivityService>();

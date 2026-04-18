@@ -1,5 +1,5 @@
-using RhemaBibleAppServerless.Application.Persistence;
-
+using System.Security.Cryptography;
+using System.Text;
 public class OtpService(
   IOtpRepository otpRepository,
   IConfiguration configuration,
@@ -12,7 +12,7 @@ public class OtpService(
   {
     if (string.IsNullOrWhiteSpace(email))
       throw new ArgumentException("Email is required for generating OTP");
-    var otp = new Random().Next(100000, 999999).ToString();
+    var otp = RandomNumberGenerator.GetInt32(100000, 1000000).ToString();
 
     await otpRepository.InvalidateActiveOtpsAsync(email!, type, cancellationToken);
 
@@ -20,7 +20,7 @@ public class OtpService(
 
     var otpCode = new OtpCode
     {
-      Code = otp,
+      Code = HashOtp(otp),
       Email = email!,
       Type = type,
       ExpiresAt = DateTime.UtcNow.AddMinutes(lifetimeMinutes),
@@ -28,6 +28,8 @@ public class OtpService(
       IsUsed = false,
       UserId = userId
     };
+
+
 
     await otpRepository.InsertAsync(otpCode, cancellationToken);
 
@@ -44,14 +46,18 @@ public class OtpService(
 
   public async Task<bool> VerifyOtpAsync(string email, string code, OtpType type, CancellationToken cancellationToken = default)
   {
-    var otp = await otpRepository.FindByCodeAndTypeAsync(code, type, cancellationToken);
+    var hashedCode = HashOtp(code);
+    var otp = await otpRepository.FindByCodeAndTypeAsync(hashedCode, type, email, cancellationToken);
 
     if (otp == null)
       return false;
 
     if (otp.Email != email)
+    {
+      await IncrementAttempts(otp, cancellationToken);
       return false;
-
+    }
+    
     if (otp.Attempts >= 5)
       return false;
 
@@ -61,8 +67,15 @@ public class OtpService(
       return false;
     }
 
-    await otpRepository.MarkUsedAsync(otp.Id!, cancellationToken);
+    var updated = await otpRepository.MarkUsedAsync(otp.Id!, cancellationToken);
 
-    return true;
+    return updated;
+  }
+
+  private static string HashOtp(string otp)
+  {
+    using var sha = SHA256.Create();
+    var bytes = sha.ComputeHash(Encoding.UTF8.GetBytes(otp));
+    return Convert.ToBase64String(bytes);
   }
 }

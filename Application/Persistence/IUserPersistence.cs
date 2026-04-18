@@ -11,8 +11,8 @@ public interface IUserPersistence
 
   Task<User?> GetByRefreshTokenAsync(string refreshToken, DateTime utcNow, CancellationToken cancellationToken = default);
   Task UpdateRefreshTokenAsync(string userId, string refreshToken, DateTime refreshTokenExpiry, CancellationToken cancellationToken = default);
-  Task UpdatePasswordAsync(string userId, string hashedPassword, CancellationToken cancellationToken = default);
-  Task SetEmailVerifiedAsync(string userId, bool verified, CancellationToken cancellationToken = default);
+  Task<bool> UpdatePasswordAsync(string userId, string hashedPassword, CancellationToken cancellationToken = default);
+  Task<bool> SetEmailVerifiedAsync(string email, bool verified, CancellationToken cancellationToken = default);
 
   Task<User?> UpdateAccountStatusAsync(string userId, AccountStatus status, CancellationToken cancellationToken = default);
   Task<PagedResult<User>> SearchAdminUsersAsync(AdminUserListQuery query, CancellationToken cancellationToken = default);

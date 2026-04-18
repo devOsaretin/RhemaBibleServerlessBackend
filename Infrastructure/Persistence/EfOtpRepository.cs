@@ -20,17 +20,22 @@ public sealed class EfOtpRepository(RhemaDbContext db) : IOtpRepository
     await db.SaveChangesAsync(cancellationToken);
   }
 
-  public Task<OtpCode?> FindByCodeAndTypeAsync(string code, OtpType type, CancellationToken cancellationToken = default) =>
-    db.OtpCodes.AsNoTracking().FirstOrDefaultAsync(o => o.Code == code && o.Type == type, cancellationToken);
+  public Task<OtpCode?> FindByCodeAndTypeAsync(string code, OtpType type, string email, CancellationToken cancellationToken = default) =>
+    db.OtpCodes.AsNoTracking().FirstOrDefaultAsync(o => o.Code == code && o.Email == email && o.Type == type, cancellationToken);
 
   public Task IncrementAttemptsAsync(string otpId, CancellationToken cancellationToken = default) =>
     db.OtpCodes.Where(o => o.Id == otpId).ExecuteUpdateAsync(
       setters => setters.SetProperty(o => o.Attempts, o => o.Attempts + 1),
       cancellationToken);
 
-  public Task MarkUsedAsync(string otpId, CancellationToken cancellationToken = default) =>
-    db.OtpCodes.Where(o => o.Id == otpId).ExecuteUpdateAsync(setters => setters
+  public async Task<bool> MarkUsedAsync(string otpId, CancellationToken cancellationToken = default)
+  {
+    var affected = await db.OtpCodes.Where(o => o.Id == otpId).ExecuteUpdateAsync(setters => setters
         .SetProperty(o => o.IsUsed, true)
         .SetProperty(o => o.UsedAt, DateTime.UtcNow),
       cancellationToken);
+
+    return affected > 0;
+  }
+
 }

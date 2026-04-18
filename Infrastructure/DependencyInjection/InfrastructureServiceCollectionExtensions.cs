@@ -9,7 +9,6 @@ using Microsoft.Extensions.Options;
 using RhemaBibleAppServerless.Application.Configuration;
 using RhemaBibleAppServerless.Application.Persistence;
 using RhemaBibleAppServerless.Infrastructure.Persistence;
-using RhemaBibleAppServerless.Infrastructure.Services.Maintenance;
 
 namespace RhemaBibleAppServerless.Infrastructure.DependencyInjection;
 
@@ -45,8 +44,6 @@ public static class InfrastructureServiceCollectionExtensions
       o.UseNpgsql(cs, n => n.EnableRetryOnFailure(5, TimeSpan.FromSeconds(2), null))
         .UseSnakeCaseNamingConvention();
     });
-
-    services.AddScoped<PostgresMaintenanceService>();
 
     services.AddScoped<IUserPersistence, EfUserPersistence>();
     services.AddScoped<INoteRepository, EfNoteRepository>();

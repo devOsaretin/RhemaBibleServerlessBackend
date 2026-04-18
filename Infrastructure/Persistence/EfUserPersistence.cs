@@ -10,11 +10,11 @@ public sealed class EfUserPersistence(RhemaDbContext db) : IUserPersistence
   public async Task<List<User>> GetAllAsync(CancellationToken cancellationToken = default) =>
     await db.Users.AsNoTracking().ToListAsync(cancellationToken);
 
-  public Task<User?> GetByIdAsync(string id, CancellationToken cancellationToken = default) =>
-    db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == id, cancellationToken);
+  public async Task<User?> GetByIdAsync(string id, CancellationToken cancellationToken = default) =>
+    await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == id, cancellationToken);
 
-  public Task<User?> GetByEmailAsync(string email, CancellationToken cancellationToken = default) =>
-    db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Email == email, cancellationToken);
+  public async Task<User?> GetByEmailAsync(string email, CancellationToken cancellationToken = default) =>
+    await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Email == email, cancellationToken);
 
   public async Task InsertAsync(User user, CancellationToken cancellationToken = default)
   {
@@ -42,29 +42,39 @@ public sealed class EfUserPersistence(RhemaDbContext db) : IUserPersistence
     await db.Users.Where(u => u.Id == id).ExecuteDeleteAsync(cancellationToken);
   }
 
-  public Task<User?> GetByRefreshTokenAsync(string refreshToken, DateTime utcNow, CancellationToken cancellationToken = default) =>
-    db.Users.AsNoTracking().FirstOrDefaultAsync(
+  public async Task<User?> GetByRefreshTokenAsync(string refreshToken, DateTime utcNow, CancellationToken cancellationToken = default) =>
+    await db.Users.AsNoTracking().FirstOrDefaultAsync(
       u => u.RefreshToken == refreshToken && u.RefreshTokenExpiryTime > utcNow,
       cancellationToken);
 
-  public Task UpdateRefreshTokenAsync(string userId, string refreshToken, DateTime refreshTokenExpiry, CancellationToken cancellationToken = default) =>
-    db.Users.Where(u => u.Id == userId).ExecuteUpdateAsync(setters => setters
+  public async Task UpdateRefreshTokenAsync(string userId, string refreshToken, DateTime refreshTokenExpiry, CancellationToken cancellationToken = default) =>
+    await db.Users.Where(u => u.Id == userId).ExecuteUpdateAsync(setters => setters
         .SetProperty(u => u.RefreshToken, refreshToken)
         .SetProperty(u => u.RefreshTokenExpiryTime, refreshTokenExpiry)
         .SetProperty(u => u.UpdatedAt, DateTime.UtcNow),
       cancellationToken);
 
-  public Task UpdatePasswordAsync(string userId, string hashedPassword, CancellationToken cancellationToken = default) =>
-    db.Users.Where(u => u.Id == userId).ExecuteUpdateAsync(setters => setters
+  public async Task<bool> UpdatePasswordAsync(string userId, string hashedPassword, CancellationToken cancellationToken = default)
+  {
+
+    var rowsAffected = await db.Users.Where(u => u.Id == userId).ExecuteUpdateAsync(setters => setters
         .SetProperty(u => u.Password, hashedPassword)
         .SetProperty(u => u.UpdatedAt, DateTime.UtcNow),
       cancellationToken);
 
-  public Task SetEmailVerifiedAsync(string userId, bool verified, CancellationToken cancellationToken = default) =>
-    db.Users.Where(u => u.Id == userId).ExecuteUpdateAsync(setters => setters
-        .SetProperty(u => u.IsEmailVerified, verified)
-        .SetProperty(u => u.UpdatedAt, DateTime.UtcNow),
-      cancellationToken);
+    return rowsAffected > 0;
+  }
+
+  public async Task<bool> SetEmailVerifiedAsync(string email, bool verified, CancellationToken cancellationToken = default)
+  {
+
+    var rowsAffected = await db.Users.Where(u => u.Email == email).ExecuteUpdateAsync(setters => setters
+            .SetProperty(u => u.IsEmailVerified, verified)
+            .SetProperty(u => u.UpdatedAt, DateTime.UtcNow),
+          cancellationToken);
+    return rowsAffected > 0;
+  }
+
 
   public async Task<User?> UpdateAccountStatusAsync(string userId, AccountStatus status, CancellationToken cancellationToken = default)
   {
@@ -176,57 +186,61 @@ public sealed class EfUserPersistence(RhemaDbContext db) : IUserPersistence
     return n > 0;
   }
 
-  public async Task<AiFreeQuotaConsumeResult?> TryConsumeFreeAiCallAsync(
+  public Task<AiFreeQuotaConsumeResult?> TryConsumeFreeAiCallAsync(
     string userId,
     int monthlyLimit,
     string monthKey,
     CancellationToken cancellationToken = default)
   {
-    await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
-    try
+    var strategy = db.Database.CreateExecutionStrategy();
+    return strategy.ExecuteAsync(async ct =>
     {
-      var user = await db.Users
-        .FromSqlInterpolated($"SELECT * FROM users WHERE id = {userId} FOR UPDATE")
-        .AsTracking()
-        .SingleOrDefaultAsync(cancellationToken);
-
-      if (user == null)
+      await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, ct);
+      try
       {
-        await tx.RollbackAsync(cancellationToken);
+        var user = await db.Users
+          .FromSqlInterpolated($"SELECT * FROM users WHERE id = {userId} FOR UPDATE")
+          .AsTracking()
+          .SingleOrDefaultAsync(ct);
+
+        if (user == null)
+        {
+          await tx.RollbackAsync(ct);
+          return null;
+        }
+
+        if (user.AiFreeCallsMonthKey == monthKey && user.AiFreeCallsUsedInMonth < monthlyLimit)
+        {
+          user.AiFreeCallsUsedInMonth++;
+          await db.SaveChangesAsync(ct);
+          await tx.CommitAsync(ct);
+          return new AiFreeQuotaConsumeResult(
+            FreeCallsRemainingThisMonth: Math.Max(0, monthlyLimit - user.AiFreeCallsUsedInMonth),
+            MonthKeyUtc: monthKey,
+            FreeCallsUsedThisMonth: user.AiFreeCallsUsedInMonth);
+        }
+
+        if (user.AiFreeCallsMonthKey != monthKey)
+        {
+          user.AiFreeCallsMonthKey = monthKey;
+          user.AiFreeCallsUsedInMonth = 1;
+          await db.SaveChangesAsync(ct);
+          await tx.CommitAsync(ct);
+          return new AiFreeQuotaConsumeResult(
+            FreeCallsRemainingThisMonth: monthlyLimit - user.AiFreeCallsUsedInMonth,
+            MonthKeyUtc: monthKey,
+            FreeCallsUsedThisMonth: user.AiFreeCallsUsedInMonth);
+        }
+
+        await tx.RollbackAsync(ct);
         return null;
       }
-
-      if (user.AiFreeCallsMonthKey == monthKey && user.AiFreeCallsUsedInMonth < monthlyLimit)
+      catch
       {
-        user.AiFreeCallsUsedInMonth++;
-        await db.SaveChangesAsync(cancellationToken);
-        await tx.CommitAsync(cancellationToken);
-        return new AiFreeQuotaConsumeResult(
-          FreeCallsRemainingThisMonth: Math.Max(0, monthlyLimit - user.AiFreeCallsUsedInMonth),
-          MonthKeyUtc: monthKey,
-          FreeCallsUsedThisMonth: user.AiFreeCallsUsedInMonth);
+        await tx.RollbackAsync(ct);
+        throw;
       }
-
-      if (user.AiFreeCallsMonthKey != monthKey)
-      {
-        user.AiFreeCallsMonthKey = monthKey;
-        user.AiFreeCallsUsedInMonth = 1;
-        await db.SaveChangesAsync(cancellationToken);
-        await tx.CommitAsync(cancellationToken);
-        return new AiFreeQuotaConsumeResult(
-          FreeCallsRemainingThisMonth: monthlyLimit - user.AiFreeCallsUsedInMonth,
-          MonthKeyUtc: monthKey,
-          FreeCallsUsedThisMonth: user.AiFreeCallsUsedInMonth);
-      }
-
-      await tx.RollbackAsync(cancellationToken);
-      return null;
-    }
-    catch
-    {
-      await tx.RollbackAsync(cancellationToken);
-      throw;
-    }
+    }, cancellationToken);
   }
 
   public async Task<User?> ResetAiQuotaForCurrentMonthAsync(string userId, string monthKey, CancellationToken cancellationToken = default)

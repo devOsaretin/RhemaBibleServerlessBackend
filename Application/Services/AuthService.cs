@@ -1,6 +1,5 @@
 using System.Security.Claims;
-using Microsoft.Extensions.Logging;
-using RhemaBibleAppServerless.Application.Persistence;
+
 
 public class AuthService(
   IUserPersistence users,
@@ -59,6 +58,7 @@ public class AuthService(
       var refreshTokenExpiry = DateTime.UtcNow.AddDays(_refreshTokenExpirationDays);
 
       await users.UpdateRefreshTokenAsync(user.Id!, refreshToken, refreshTokenExpiry, cancellationToken);
+      userService.ClearCachedUser(user.Id!);
 
       var userDto = user.ToDto(aiQuotaService, includeAiUsage: false);
       return new AuthResponse
@@ -86,6 +86,7 @@ public class AuthService(
     var newRefreshTokenExpiry = DateTime.UtcNow.AddDays(_refreshTokenExpirationDays);
 
     await users.UpdateRefreshTokenAsync(user.Id!, newRefreshToken, newRefreshTokenExpiry, cancellationToken);
+    userService.ClearCachedUser(user.Id!);
 
     var userDto = user.ToDto(aiQuotaService, includeAiUsage: false);
     return new AuthResponse
@@ -114,6 +115,7 @@ public class AuthService(
     var refreshTokenExpiry = DateTime.UtcNow.AddDays(_refreshTokenExpirationDays);
 
     await users.UpdateRefreshTokenAsync(newUser.Id!, refreshToken, refreshTokenExpiry, cancellationToken);
+    userService.ClearCachedUser(newUser.Id!);
 
     var newUserDto = newUser.ToDto(aiQuotaService, includeAiUsage: false);
     return new AuthResponse
@@ -186,18 +188,28 @@ public class AuthService(
 
     if (isValidOtp)
     {
-      var user = await userService.GetByEmailAsync(email, cancellationToken);
-      if (user != null && user.Id != null)
+      var verified = await users.SetEmailVerifiedAsync(email, true, cancellationToken);
+
+      if (verified)
       {
-        await users.SetEmailVerifiedAsync(user.Id, true, cancellationToken);
-        userService.ClearCachedUser(user.Id);
+        var user = await userService.GetByEmailAsync(email, cancellationToken);
+        if (user is not null)
+        {
+          userService.ClearCachedUser(user.Id!);
+        }
+
+        return true;
       }
 
-      return true;
+
+
     }
 
     return false;
   }
+
+
+
 
   public async Task<bool> ResendOtpAsync(ResendOtpRequest resendOtpRequest, CancellationToken cancellationToken = default)
   {

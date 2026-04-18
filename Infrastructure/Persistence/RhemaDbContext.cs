@@ -72,7 +72,7 @@ public sealed class RhemaDbContext(DbContextOptions<RhemaDbContext> options) : D
       e.HasKey(x => x.Id);
       e.Property(x => x.Id).HasMaxLength(64);
       e.Property(x => x.UserId).IsRequired().HasMaxLength(64);
-      e.Property(x => x.Code).IsRequired().HasMaxLength(32);
+      e.Property(x => x.Code).IsRequired().HasMaxLength(128);
       e.Property(x => x.Type).HasConversion<string>().HasMaxLength(64);
       e.Property(x => x.Email).IsRequired().HasMaxLength(320);
       e.HasIndex(x => x.ExpiresAt);
