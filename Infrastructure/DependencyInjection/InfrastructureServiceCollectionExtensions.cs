@@ -1,6 +1,4 @@
 using System.Net.Http.Headers;
-using Amazon;
-using Amazon.Polly;
 using Azure.Messaging.ServiceBus;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
@@ -23,19 +21,8 @@ public static class InfrastructureServiceCollectionExtensions
     services.Configure<ServiceBusSettings>(config.GetSection(ServiceBusSettings.SectionName));
     services.Configure<ElevenLabsTtsOptions>(config.GetSection(ElevenLabsTtsOptions.SectionName));
     services.Configure<AzureBlobTtsOptions>(config.GetSection(AzureBlobTtsOptions.SectionName));
-    services.Configure<TextToSpeechRoutingOptions>(config.GetSection(TextToSpeechRoutingOptions.SectionName));
-    services.Configure<PollyTtsOptions>(config.GetSection(PollyTtsOptions.SectionName));
     services.Configure<AiQueryCacheOptions>(config.GetSection(AiQueryCacheOptions.SectionName));
     services.Configure<AiQuotaOptions>(config.GetSection(AiQuotaOptions.SectionName));
-
-    services.AddSingleton<IAmazonPolly>(sp =>
-    {
-      var options = sp.GetRequiredService<IOptions<PollyTtsOptions>>().Value;
-      var region = RegionEndpoint.GetBySystemName(string.IsNullOrWhiteSpace(options.Region) ? "us-east-1" : options.Region);
-      if (!string.IsNullOrEmpty(options.AccessKey) && !string.IsNullOrEmpty(options.SecretKey))
-        return new AmazonPollyClient(options.AccessKey, options.SecretKey, region);
-      return new AmazonPollyClient(region);
-    });
 
     services.AddDbContext<RhemaDbContext>((sp, o) =>
     {
@@ -65,6 +52,7 @@ public static class InfrastructureServiceCollectionExtensions
     services.AddScoped<IRecentActivityRepository, EfRecentActivityRepository>();
     services.AddScoped<IOtpRepository, EfOtpRepository>();
     services.AddScoped<IProcessedWebhookRepository, EfProcessedWebhookRepository>();
+    services.AddScoped<IProcessedServiceBusDeliveryRepository, EfProcessedServiceBusDeliveryRepository>();
     services.AddScoped<IAdminMetricsRepository, EfAdminMetricsRepository>();
 
     services.AddSingleton<IPromptFileReader, CachedPromptFileReader>();

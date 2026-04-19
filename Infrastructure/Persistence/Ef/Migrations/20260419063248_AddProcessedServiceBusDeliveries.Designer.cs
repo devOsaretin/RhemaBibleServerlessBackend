@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using RhemaBibleAppServerless.Infrastructure.Persistence;
@@ -11,9 +12,11 @@ using RhemaBibleAppServerless.Infrastructure.Persistence;
 namespace Infrastructure.Persistence.Ef.Migrations
 {
     [DbContext(typeof(RhemaDbContext))]
-    partial class RhemaDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260419063248_AddProcessedServiceBusDeliveries")]
+    partial class AddProcessedServiceBusDeliveries
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
