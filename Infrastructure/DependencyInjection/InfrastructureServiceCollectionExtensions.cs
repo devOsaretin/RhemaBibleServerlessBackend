@@ -65,6 +65,7 @@ public static class InfrastructureServiceCollectionExtensions
     services.AddScoped<IRecentActivityRepository, EfRecentActivityRepository>();
     services.AddScoped<IOtpRepository, EfOtpRepository>();
     services.AddScoped<IProcessedWebhookRepository, EfProcessedWebhookRepository>();
+    services.AddScoped<IProcessedServiceBusDeliveryRepository, EfProcessedServiceBusDeliveryRepository>();
     services.AddScoped<IAdminMetricsRepository, EfAdminMetricsRepository>();
 
     services.AddSingleton<IPromptFileReader, CachedPromptFileReader>();

@@ -1,15 +1,17 @@
 using System.Security.Claims;
 using System.Net;
-using System.Text.Json;
+using Azure.Messaging.ServiceBus;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using RhemaBibleAppServerless.Application.Persistence;
 using RhemaBibleAppServerless.Domain.Enums;
 
 
 public class RecentActivityFunctions(
   IRecentActivityService recentActivityService,
+  IProcessedServiceBusDeliveryRepository processedServiceBusDeliveries,
   IFunctionTokenValidator tokenValidator,
   ICurrentPrincipalAccessor principalAccessor,
   IHostEnvironment env,
@@ -49,21 +51,31 @@ public class RecentActivityFunctions(
 
 
   [Function("ProcessActivity")]
-  public async Task AddUserActivityFromQueue(
-    [ServiceBusTrigger(QueueNames.Activity, Connection = "ServiceBus:ConnectionString")] string messageBody)
-  {
-    var addActivityToQueueDto = ParseQueueMessage.Parse<AddActivityToQueueDto>(messageBody);
-    Enum.TryParse<ActivityType>(addActivityToQueueDto.ActivityType, out var activityType);
-    var newActivity = new RecentActivity
+  public Task AddUserActivityFromQueue(
+    [ServiceBusTrigger(QueueNames.Activity, Connection = "ServiceBus:ConnectionString")] ServiceBusReceivedMessage message,
+    CancellationToken cancellationToken) =>
+    FunctionExecutionHelper.ExecuteNonHttpAsync(logger, cancellationToken, async ct =>
     {
-      AuthId = addActivityToQueueDto.AuthId,
-      Title = addActivityToQueueDto.Title,
-      ActivityType = activityType
-    };
+      var dedupeKey = ServiceBusDeliveryDedupeKey.Build(QueueNames.Activity, message);
+      if (!await processedServiceBusDeliveries.TryInsertProcessedDeliveryAsync(dedupeKey, ct))
+      {
+        logger.LogInformation("Skipping duplicate Service Bus delivery for queue {Queue}", QueueNames.Activity);
+        return;
+      }
 
-    await recentActivityService.AddActivityByUser(newActivity);
-    logger.LogInformation("Processing activity for user {UserId}", addActivityToQueueDto.AuthId);
-  }
+      var messageBody = message.Body.ToString();
+      var addActivityToQueueDto = ParseQueueMessage.Parse<AddActivityToQueueDto>(messageBody);
+      Enum.TryParse<ActivityType>(addActivityToQueueDto.ActivityType, out var activityType);
+      var newActivity = new RecentActivity
+      {
+        AuthId = addActivityToQueueDto.AuthId,
+        Title = addActivityToQueueDto.Title,
+        ActivityType = activityType
+      };
+
+      await recentActivityService.AddActivityByUser(newActivity);
+      logger.LogInformation("Processing activity for user {UserId}", addActivityToQueueDto.AuthId);
+    });
 
   
 }
