@@ -8,6 +8,7 @@
 
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Azure.Messaging.ServiceBus" Version="7.20.1" />
     <ProjectReference Include="..\Domain\Domain.csproj" />
     <ProjectReference Include="..\Application\Application.csproj" />
     <PackageReference Include="AWSSDK.Polly" Version="3.7.401" />

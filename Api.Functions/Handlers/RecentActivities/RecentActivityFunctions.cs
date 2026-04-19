@@ -1,10 +1,12 @@
 using System.Security.Claims;
 using System.Net;
+using System.Text.Json;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using RhemaBibleAppServerless.Domain.Models;
+using RhemaBibleAppServerless.Domain.Enums;
+
 
 public class RecentActivityFunctions(
   IRecentActivityService recentActivityService,
@@ -44,5 +46,25 @@ public class RecentActivityFunctions(
       var activity = await recentActivityService.AddActivityByUser(newActivity);
       return await req.CreateJsonResponse(HttpStatusCode.OK, ApiResponse<RecentActivity>.SuccessResponse(activity));
     }, tokenValidator, principalAccessor, cancellationToken, logger, env);
+
+
+  [Function("ProcessActivity")]
+  public async Task AddUserActivityFromQueue(
+    [ServiceBusTrigger(QueueNames.Activity, Connection = "ServiceBus:ConnectionString")] string messageBody)
+  {
+    var addActivityToQueueDto = ParseQueueMessage.Parse<AddActivityToQueueDto>(messageBody);
+    Enum.TryParse<ActivityType>(addActivityToQueueDto.ActivityType, out var activityType);
+    var newActivity = new RecentActivity
+    {
+      AuthId = addActivityToQueueDto.AuthId,
+      Title = addActivityToQueueDto.Title,
+      ActivityType = activityType
+    };
+
+    await recentActivityService.AddActivityByUser(newActivity);
+    logger.LogInformation("Processing activity for user {UserId}", addActivityToQueueDto.AuthId);
+  }
+
+  
 }
 
