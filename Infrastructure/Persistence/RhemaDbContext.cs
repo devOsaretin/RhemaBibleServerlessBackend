@@ -11,6 +11,7 @@ public sealed class RhemaDbContext(DbContextOptions<RhemaDbContext> options) : D
   public DbSet<RecentActivity> RecentActivities => Set<RecentActivity>();
   public DbSet<OtpCode> OtpCodes => Set<OtpCode>();
   public DbSet<ProcessedWebhook> ProcessedWebhooks => Set<ProcessedWebhook>();
+  public DbSet<ProcessedServiceBusDelivery> ProcessedServiceBusDeliveries => Set<ProcessedServiceBusDelivery>();
 
   protected override void OnModelCreating(ModelBuilder modelBuilder)
   {
@@ -82,6 +83,13 @@ public sealed class RhemaDbContext(DbContextOptions<RhemaDbContext> options) : D
     modelBuilder.Entity<ProcessedWebhook>(e =>
     {
       e.ToTable("processed_webhooks");
+      e.HasKey(x => x.Id);
+      e.Property(x => x.Id).HasMaxLength(256);
+    });
+
+    modelBuilder.Entity<ProcessedServiceBusDelivery>(e =>
+    {
+      e.ToTable("processed_service_bus_deliveries");
       e.HasKey(x => x.Id);
       e.Property(x => x.Id).HasMaxLength(256);
     });
