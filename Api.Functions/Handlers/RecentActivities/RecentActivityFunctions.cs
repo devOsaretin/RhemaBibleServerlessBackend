@@ -50,10 +50,9 @@ public class RecentActivityFunctions(
 
   [Function("ProcessActivity")]
   public async Task AddUserActivityFromQueue(
-    [ServiceBusTrigger(QueueNames.Activity, Connection = "ServiceBus:ConnectionString")] string messageBody,
-    CancellationToken cancellationToken)
+    [ServiceBusTrigger(QueueNames.Activity, Connection = "ServiceBus:ConnectionString")] string messageBody)
   {
-    var addActivityToQueueDto = ParseActivityQueueMessage(messageBody);
+    var addActivityToQueueDto = ParseQueueMessage.Parse<AddActivityToQueueDto>(messageBody);
     Enum.TryParse<ActivityType>(addActivityToQueueDto.ActivityType, out var activityType);
     var newActivity = new RecentActivity
     {
@@ -66,30 +65,6 @@ public class RecentActivityFunctions(
     logger.LogInformation("Processing activity for user {UserId}", addActivityToQueueDto.AuthId);
   }
 
-  private static AddActivityToQueueDto ParseActivityQueueMessage(string messageBody)
-  {
-    if (string.IsNullOrWhiteSpace(messageBody))
-      throw new InvalidOperationException("Activity queue message is empty.");
-
-    var options = new JsonSerializerOptions
-    {
-      PropertyNameCaseInsensitive = true,
-      PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-    };
-
-    try
-    {
-      return JsonSerializer.Deserialize<AddActivityToQueueDto>(messageBody, options)
-        ?? throw new JsonException("Deserialized activity payload was null.");
-    }
-    catch (JsonException) when (messageBody.TrimStart().StartsWith("\"", StringComparison.Ordinal))
-    {
-      var inner = JsonSerializer.Deserialize<string>(messageBody, options);
-      if (string.IsNullOrWhiteSpace(inner))
-        throw;
-      return JsonSerializer.Deserialize<AddActivityToQueueDto>(inner, options)
-        ?? throw new JsonException("Deserialized activity payload was null.");
-    }
-  }
+  
 }
 

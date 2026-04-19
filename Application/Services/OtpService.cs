@@ -3,7 +3,8 @@ using System.Text;
 public class OtpService(
   IOtpRepository otpRepository,
   IConfiguration configuration,
-  INotificationService notificationService) : IOtpService
+  IServiceBusService serviceBusService,
+  ILogger<OtpService> logger) : IOtpService
 {
   private Task IncrementAttempts(OtpCode otp, CancellationToken cancellationToken) =>
     otpRepository.IncrementAttemptsAsync(otp.Id!, cancellationToken);
@@ -36,7 +37,15 @@ public class OtpService(
     var subject = "Rhema Bible — Your verification code";
     var body = EmailTemplates.VerificationCode(otp, lifetimeMinutes);
 
-    await notificationService.SendAsync(email!, subject, body, cancellationToken);
+    var queueMessage = new EmailRequestFromQueueDto
+    {
+      Body = body,
+      Subject = subject,
+      Recipient = email
+    };
+
+    await serviceBusService.PublishAsync(queueMessage, QueueNames.Email, cancellationToken);
+    logger.LogInformation("Message publish to queue: {queue}", QueueNames.Email);
 
     return otp;
   }
@@ -57,7 +66,7 @@ public class OtpService(
       await IncrementAttempts(otp, cancellationToken);
       return false;
     }
-    
+
     if (otp.Attempts >= 5)
       return false;
 

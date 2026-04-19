@@ -7,7 +7,7 @@ public class AuthService(
   IPasswordHasher passwordHasher,
   IJwtService jwtService,
   IOtpService otpService,
-  INotificationService notificationService,
+  IServiceBusService serviceBusService,
   IAiQuotaService aiQuotaService,
   ILogger<AuthService> logger,
   IConfiguration configuration) : IAuthService
@@ -146,7 +146,8 @@ public class AuthService(
     await users.UpdatePasswordAsync(user.Id!, hashedPassword, cancellationToken);
 
     userService.ClearCachedUser(user.Id!);
-    NotifyPasswordChangedFireAndForget(user.Id, user.Email);
+    NotifyPasswordChanged(user.Id, user.Email);
+    logger.LogInformation("Reset Email sent to {email}", user.Email);
   }
 
   public async Task ChangePasswordAsync(string userId, ChangePasswordRequest changePasswordRequest, CancellationToken cancellationToken = default)
@@ -161,26 +162,27 @@ public class AuthService(
     await users.UpdatePasswordAsync(user.Id!, hashedPassword, cancellationToken);
 
     userService.ClearCachedUser(user.Id!);
-    NotifyPasswordChangedFireAndForget(user.Id, user.Email);
+    NotifyPasswordChanged(user.Id, user.Email);
   }
 
-  private void NotifyPasswordChangedFireAndForget(string? userId, string email)
+  private async void NotifyPasswordChanged(string? userId, string email)
   {
     var changedAt = DateTime.UtcNow;
-    _ = Task.Run(async () =>
+
+    var subject = "Rhema Bible — Password updated";
+    var body = EmailTemplates.PasswordChanged(changedAt);
+    var queueMessage = new EmailRequestFromQueueDto
     {
-      try
-      {
-        var subject = "Rhema Bible — Password updated";
-        var body = EmailTemplates.PasswordChanged(changedAt);
-        await notificationService.SendAsync(email, subject, body, CancellationToken.None);
-      }
-      catch (Exception ex)
-      {
-        logger.LogWarning(ex, "Failed to send password-changed email for user {UserId}", userId);
-      }
-    });
+      Subject = subject,
+      Recipient = email,
+      Body = body
+    };
+
+    await serviceBusService.PublishAsync(queueMessage, QueueNames.Email);
+    logger.LogInformation("Message publish to queue: {queue}", QueueNames.Email);
+
   }
+
 
   public async Task<bool> VerifyEmailAsync(string email, string otpCode, OtpType otpType, CancellationToken cancellationToken)
   {
