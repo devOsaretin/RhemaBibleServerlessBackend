@@ -14,6 +14,7 @@ public class AdminService(
     var updatedUser = await users.UpdateAccountStatusAsync(userId, AccountStatus.Active, CancellationToken.None);
     if (updatedUser == null)
       throw new ResourceNotFoundException($"User with ID '{userId}' was not found.");
+    userService.ClearCachedUser(userId);
     return updatedUser.ToDto(aiQuotaService);
   }
 
@@ -22,6 +23,7 @@ public class AdminService(
     var updatedUser = await users.UpdateAccountStatusAsync(userId, AccountStatus.Suspended, CancellationToken.None);
     if (updatedUser == null)
       throw new ResourceNotFoundException($"User with ID '{userId}' was not found.");
+    userService.ClearCachedUser(userId);
     return updatedUser.ToDto(aiQuotaService);
   }
 
@@ -144,6 +146,7 @@ public class AdminService(
       userId,
       updatedUser.SubscriptionType);
 
+    userService.ClearCachedUser(userId);
     return updatedUser.ToDto(aiQuotaService);
   }
 
@@ -264,6 +267,7 @@ public class AdminService(
     if (updatedUser == null)
       throw new ResourceNotFoundException($"User with ID '{userId}' was not found.");
 
+    userService.ClearCachedUser(userId);
     return new AdminUserAiQuotaDto
     {
       UserId = userId,
@@ -283,6 +287,7 @@ public class AdminService(
     if (updatedUser == null)
       throw new ResourceNotFoundException($"User with ID '{userId}' was not found.");
 
+    userService.ClearCachedUser(userId);
     return new AdminUserAiQuotaDto
     {
       UserId = userId,

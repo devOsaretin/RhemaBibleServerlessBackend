@@ -21,9 +21,8 @@ public class NoteFunctions(
     {
       var userId = principal.GetRequiredClaim(ClaimTypes.NameIdentifier);
 
-      var query = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(req.Url.Query);
-      var pageNumber = int.TryParse(query.TryGetValue("pageNumber", out var pn) ? pn.ToString() : null, out var parsedPageNumber) ? parsedPageNumber : 0;
-      var pageSize = int.TryParse(query.TryGetValue("pageSize", out var ps) ? ps.ToString() : null, out var parsedPageSize) ? parsedPageSize : 0;
+      var (pageNumber, pageSize) = req.GetPagination();
+      logger.LogInformation("pageNumber: {0}, pageSize: {1}", pageNumber, pageSize);
 
       var pagedResult = await noteService.GetNotesAsync(userId, pageNumber, pageSize);
       var response = ApiResponse<List<Note>>.FromPagedResult(pagedResult);

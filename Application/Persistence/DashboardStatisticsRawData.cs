@@ -1,6 +1,5 @@
 namespace RhemaBibleAppServerless.Application.Persistence;
 
-/// <summary>Raw counts and series for building dashboard statistics export in Application.</summary>
 public sealed class DashboardStatisticsRawData
 {
   public long TotalUsers { get; init; }

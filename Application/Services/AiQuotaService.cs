@@ -4,15 +4,18 @@ using RhemaBibleAppServerless.Application.Persistence;
 public sealed class AiQuotaService : IAiQuotaService
 {
   private readonly IUserPersistence _users;
+  private readonly IUserApplicationService _userApplicationService;
   private readonly Func<DateTime> _utcNow;
   private readonly IOptionsMonitor<AiQuotaOptions> _options;
 
   public AiQuotaService(
     IUserPersistence users,
+    IUserApplicationService userApplicationService,
     IOptionsMonitor<AiQuotaOptions> options,
     Func<DateTime>? utcNow = null)
   {
     _users = users;
+    _userApplicationService = userApplicationService;
     _options = options;
     _utcNow = utcNow ?? (() => DateTime.UtcNow);
   }
@@ -50,7 +53,10 @@ public sealed class AiQuotaService : IAiQuotaService
 
     var result = await _users.TryConsumeFreeAiCallAsync(userId, limit, monthKey, cancellationToken);
     if (result != null)
+    {
+      _userApplicationService.ClearCachedUser(userId);
       return result;
+    }
 
     throw new AiMonthlyQuotaExceededException(
       $"You've used all {limit} free AI requests this month. Subscribe to keep using AI features.");

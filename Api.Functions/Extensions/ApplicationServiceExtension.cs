@@ -27,10 +27,11 @@ public static class ApplicationServiceExtension
       var queryCacheOptions = provider.GetRequiredService<IOptionsMonitor<AiQueryCacheOptions>>();
       var httpClientFactory = provider.GetRequiredService<IHttpClientFactory>();
       var httpClient = httpClientFactory.CreateClient(nameof(MyOpenAIClient));
+      var serviceBusService = provider.GetRequiredService<IServiceBusService>();
 
       return new MyOpenAIClient(
         currentUserService,
-        recentActivityService,
+        serviceBusService,
         aiQuotaService,
         promptFiles,
         memoryCache,

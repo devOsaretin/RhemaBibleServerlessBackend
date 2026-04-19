@@ -12,3 +12,9 @@ public record AddActivityDto(
     ActivityType ActivityType
 );
 
+public class AddActivityToQueueDto
+{
+    public required string Title { get; set; }
+    public required string ActivityType { get; set; }
+    public required string AuthId { get; set; }
+}

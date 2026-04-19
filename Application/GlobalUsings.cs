@@ -1,3 +1,6 @@
+global using System.Threading;
+global using System.Threading.Tasks;
+
 global using RhemaBibleAppServerless.Application.Persistence;
 global using RhemaBibleAppServerless.Domain.Enums;
 global using RhemaBibleAppServerless.Domain.Models;
