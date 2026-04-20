@@ -66,12 +66,40 @@ public class RevenueCatFunctions(
         }
 
         var expiresAt = FromUnixMs(eventData.ExpirationAtMs);
-        var isActive = expiresAt == null || expiresAt > DateTime.UtcNow;
-        var newSubscriptionType = isActive ? MapProduct(eventData.ProductId) : SubscriptionType.Free;
+        var nowUtc = DateTime.UtcNow;
+        SubscriptionType newSubscriptionType;
+        var mappedProduct = MapProduct(eventData.ProductId);
 
-        logger.LogInformation(
- "ProductId from RevenueCat: '{ProductType}', IsActive: {IsActive}, ExpiresAt: {ExpiresAt}",
- MapProduct(eventData.ProductId), isActive, expiresAt);
+        switch (eventData.Type?.ToLower(CultureInfo.InvariantCulture))
+        {
+          case "initial_purchase":
+          case "non_renewing_purchase":
+          case "uncancellation":
+          case "renewal":
+
+            var isActive = expiresAt == null || expiresAt > DateTime.UtcNow;
+            newSubscriptionType = isActive ? mappedProduct : SubscriptionType.Free;
+
+            logger.LogInformation(
+            "ProductId from RevenueCat: '{ProductType}', IsActive: {IsActive}, ExpiresAt: {ExpiresAt}",
+            mappedProduct, isActive, expiresAt);
+
+            break;
+
+          case "cancellation":
+            var stillHasAccess = expiresAt != null && expiresAt > nowUtc;
+            newSubscriptionType = stillHasAccess ? user.SubscriptionType : SubscriptionType.Free;
+            break;
+
+          case "expiration":
+            newSubscriptionType = SubscriptionType.Free;
+            break;
+
+          default:
+            logger.LogWarning("Unknown event type: {EventType}", eventData.Type);
+            return req.CreateResponse(HttpStatusCode.OK);
+        }
+
 
         if (user.SubscriptionType != newSubscriptionType || user.SubscriptionExpiresAt != expiresAt)
         {
