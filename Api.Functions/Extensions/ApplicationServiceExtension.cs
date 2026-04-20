@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using RhemaBibleAppServerless.Application.Configuration;
 using RhemaBibleAppServerless.Application.DependencyInjection;
+using RhemaBibleAppServerless.Application.Persistence;
 using RhemaBibleAppServerless.Infrastructure.DependencyInjection;
 
 public static class ApplicationServiceExtension
@@ -20,6 +21,7 @@ public static class ApplicationServiceExtension
     services.AddScoped<IAIClient>(provider =>
     {
       var currentUserService = provider.GetRequiredService<ICurrentUserService>();
+      var userPersistence = provider.GetRequiredService<IUserPersistence>();
       var recentActivityService = provider.GetRequiredService<IRecentActivityService>();
       var aiQuotaService = provider.GetRequiredService<IAiQuotaService>();
       var promptFiles = provider.GetRequiredService<IPromptFileReader>();
@@ -31,6 +33,7 @@ public static class ApplicationServiceExtension
 
       return new MyOpenAIClient(
         currentUserService,
+        userPersistence,
         serviceBusService,
         aiQuotaService,
         promptFiles,
