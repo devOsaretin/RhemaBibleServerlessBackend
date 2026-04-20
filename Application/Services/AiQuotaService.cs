@@ -48,8 +48,26 @@ public sealed class AiQuotaService : IAiQuotaService
 
   public async Task<AiFreeQuotaConsumeResult> ConsumeFreeCallAsync(string userId, CancellationToken cancellationToken = default)
   {
+    var user = await _users.GetByIdAsync(userId, cancellationToken);
+    if (user == null)
+    {
+      throw new InvalidOperationException($"User not found: {userId}");
+    }
+
     var limit = GetEffectiveFreeCallsPerMonth(_options.CurrentValue);
     var monthKey = GetUtcMonthKey(_utcNow());
+
+    if (user.HasActivePremiumSubscription())
+    {
+      _userApplicationService.ClearCachedUser(userId);
+      var usedInMonth = string.Equals(user.AiFreeCallsMonthKey, monthKey, StringComparison.Ordinal)
+        ? user.AiFreeCallsUsedInMonth
+        : 0;
+      return new AiFreeQuotaConsumeResult(
+        FreeCallsRemainingThisMonth: Math.Max(0, limit - usedInMonth),
+        MonthKeyUtc: monthKey,
+        FreeCallsUsedThisMonth: usedInMonth);
+    }
 
     var result = await _users.TryConsumeFreeAiCallAsync(userId, limit, monthKey, cancellationToken);
     if (result != null)
