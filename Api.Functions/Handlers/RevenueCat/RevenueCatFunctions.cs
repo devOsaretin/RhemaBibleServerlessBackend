@@ -50,6 +50,8 @@ public class RevenueCatFunctions(
           eventData.Type,
           appUserId);
 
+
+
         if (!await webHookService.TryMarkEventProcessedAsync(eventData.Id!, ct))
         {
           logger.LogWarning("Failed to mark event as processed");
@@ -66,6 +68,10 @@ public class RevenueCatFunctions(
         var expiresAt = FromUnixMs(eventData.ExpirationAtMs);
         var isActive = expiresAt == null || expiresAt > DateTime.UtcNow;
         var newSubscriptionType = isActive ? MapProduct(eventData.ProductId) : SubscriptionType.Free;
+
+        logger.LogInformation(
+ "ProductId from RevenueCat: '{ProductType}', IsActive: {IsActive}, ExpiresAt: {ExpiresAt}",
+ MapProduct(eventData.ProductId), isActive, expiresAt);
 
         if (user.SubscriptionType != newSubscriptionType || user.SubscriptionExpiresAt != expiresAt)
         {
@@ -108,11 +114,30 @@ public class RevenueCatFunctions(
     return authHeader == _revenueCatSettings.WebhookSecret;
   }
 
-  private static SubscriptionType MapProduct(string? productId) =>
-    productId?.ToLower(CultureInfo.InvariantCulture) switch
+  private SubscriptionType MapProduct(string? productId)
+  {
+    if (string.IsNullOrEmpty(productId)) return SubscriptionType.Free;
+
+    var lowerId = productId.ToLower(CultureInfo.InvariantCulture);
+
+    // Match your actual product ID from RevenueCat
+    switch (lowerId)
     {
-      "monthly" => SubscriptionType.PremiumMonthly,
-      "yearly" => SubscriptionType.PremiumYearly,
-      _ => SubscriptionType.Free
-    };
+      case "premium_monthly":
+      case "monthly":
+
+        return SubscriptionType.PremiumMonthly;
+
+      case "premium_yearly":
+      case "yearly":
+
+        return SubscriptionType.PremiumYearly;
+
+
+
+      default:
+        logger.LogWarning("Unknown ProductId: {ProductId}", productId);
+        return SubscriptionType.Free;
+    }
+  }
 }
