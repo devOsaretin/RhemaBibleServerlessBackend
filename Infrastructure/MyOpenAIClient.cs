@@ -161,6 +161,40 @@ public class MyOpenAIClient : IAIClient
         return new AiClientResult(data, usage);
     }
 
+    public async Task<AiClientResult> GenerateApplyVerseAsync(
+        ApplyVerseRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var (reference, verseText, userNote) = ApplyVerseRequestValidator.NormalizeOrThrow(request);
+
+        var currentUser = await _currentUserService.GetUserAsync(cancellationToken);
+        var hasActivePremium = currentUser.HasActivePremiumSubscription();
+        var usage = await ResolveUsageAsync(currentUser, hasActivePremium, cancellationToken);
+
+        var prompt = PromptHelper.GenerateApplyVersePrompt(_promptFiles, reference, verseText, userNote, currentUser.FirstName);
+
+        var payload = BuildPayload(prompt, stream: false);
+
+        if (!_httpClient.DefaultRequestHeaders.Contains("Authorization"))
+        {
+            throw new InvalidOperationException("HttpClient is missing the Authorization header.");
+        }
+
+        var response = await _httpClient.PostAsJsonAsync(ApiUrl, payload, cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+            throw new InvalidOperationException($"OpenAI API call failed: {response.StatusCode}, {body}");
+        }
+
+        await LogActivity(currentUser.Id!, $"Apply verse: {reference}");
+
+        var json = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: cancellationToken);
+        var data = ParseChoicesContent(json, fallbackPropertyName: "lifeInsight");
+        return new AiClientResult(data, usage);
+    }
+
     public async IAsyncEnumerable<AiStreamPart> StreamGenerateAsync(
         string query,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
@@ -200,6 +234,25 @@ public class MyOpenAIClient : IAIClient
 
         var prompt = PromptHelper.GenerateChatPrompt(_promptFiles, query, currentUser.FirstName);
         await foreach (var part in StreamCompletionCoreAsync(currentUser.Id!, query, prompt, cancellationToken))
+            yield return part;
+    }
+
+    public async IAsyncEnumerable<AiStreamPart> StreamGenerateConversationGospelChatAsync(
+        IReadOnlyList<ChatMessageDto> conversationMessages,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        var currentUser = await _currentUserService.GetUserAsync(cancellationToken);
+        var hasActivePremium = currentUser.HasActivePremiumSubscription();
+        var usage = await ResolveUsageAsync(currentUser, hasActivePremium, cancellationToken);
+        yield return new AiStreamUsagePart(usage);
+
+        var prompt = PromptHelper.GenerateConversationGospelChatPrompt(_promptFiles, conversationMessages, currentUser.FirstName);
+
+        var userQueryForLog = conversationMessages
+            .LastOrDefault(m => string.Equals(m.Role, "user", StringComparison.OrdinalIgnoreCase))
+            ?.Content ?? "(conversation)";
+
+        await foreach (var part in StreamCompletionCoreAsync(currentUser.Id!, userQueryForLog, prompt, cancellationToken))
             yield return part;
     }
 

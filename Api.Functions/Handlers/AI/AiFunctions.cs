@@ -128,6 +128,44 @@ public class AiFunctions(
       logger,
       env);
 
+  [Function("AI_ConversationGospelChatStream")]
+  public Task<HttpResponseData> ConversationGospelChatStream(
+    [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "v1/ai/conversation-gospel/stream")] HttpRequestData req,
+    CancellationToken cancellationToken) =>
+    FunctionExecutionHelper.ExecuteWithAuthAsync(
+      req,
+      async (_, ct) =>
+      {
+        var body = await req.ReadRequiredJsonAsync<ConversationGospelChatStreamRequest>(ct);
+        var messages = ConversationGospelChatValidator.NormalizeOrThrow(body.Messages);
+        var res = CreateSseResponse(req);
+        await WriteSseStreamAsync(res, aiClient.StreamGenerateConversationGospelChatAsync(messages, ct), ct);
+        return res;
+      },
+      tokenValidator,
+      principalAccessor,
+      cancellationToken,
+      logger,
+      env);
+
+  [Function("AI_ApplyVerse")]
+  public Task<HttpResponseData> ApplyVerse(
+    [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "v1/ai/apply-verse")] HttpRequestData req,
+    CancellationToken cancellationToken) =>
+    FunctionExecutionHelper.ExecuteWithAuthAsync(
+      req,
+      async (_, ct) =>
+      {
+        var body = await req.ReadRequiredJsonAsync<ApplyVerseRequest>(ct);
+        var result = await aiClient.GenerateApplyVerseAsync(body, ct);
+        return await req.CreateJsonResponse(HttpStatusCode.OK, new { data = result.Data, aiUsage = result.AiUsage });
+      },
+      tokenValidator,
+      principalAccessor,
+      cancellationToken,
+      logger,
+      env);
+
   private static HttpResponseData CreateSseResponse(HttpRequestData req)
   {
     var res = req.CreateResponse(HttpStatusCode.OK);
