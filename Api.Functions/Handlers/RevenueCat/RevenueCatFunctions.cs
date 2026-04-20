@@ -1,16 +1,19 @@
+using System.Globalization;
 using System.Net;
-using Microsoft.Azure.Functions.Worker.Http;
 using Microsoft.Azure.Functions.Worker;
+using Microsoft.Azure.Functions.Worker.Http;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using RhemaBibleAppServerless.Domain.Enums;
-using System.Globalization;
+using RhemaBibleAppServerless.Domain.Models;
+using RhemaBibleAppServerless.Shared.Helpers;
 
 public class RevenueCatFunctions(
   IAdminService adminService,
   IUserApplicationService userService,
   IWebHookService webHookService,
+  IServiceBusService serviceBusService,
   IOptions<RevenueCatSettings> revenueCatSettings,
   ILogger<RevenueCatFunctions> logger,
   IHostEnvironment env)
@@ -50,8 +53,6 @@ public class RevenueCatFunctions(
           eventData.Type,
           appUserId);
 
-
-
         if (!await webHookService.TryMarkEventProcessedAsync(eventData.Id!, ct))
         {
           logger.LogWarning("Failed to mark event as processed");
@@ -69,8 +70,12 @@ public class RevenueCatFunctions(
         var nowUtc = DateTime.UtcNow;
         SubscriptionType newSubscriptionType;
         var mappedProduct = MapProduct(eventData.ProductId);
+        var eventKind = eventData.Type?.ToLower(CultureInfo.InvariantCulture) ?? "";
 
-        switch (eventData.Type?.ToLower(CultureInfo.InvariantCulture))
+        bool? purchaseRenewalUncancelActive = null;
+        bool? cancellationStillHasAccess = null;
+
+        switch (eventKind)
         {
           case "initial_purchase":
           case "non_renewing_purchase":
@@ -78,16 +83,32 @@ public class RevenueCatFunctions(
           case "renewal":
 
             var isActive = expiresAt == null || expiresAt > DateTime.UtcNow;
+            purchaseRenewalUncancelActive = isActive;
             newSubscriptionType = isActive ? mappedProduct : SubscriptionType.Free;
 
             logger.LogInformation(
-            "ProductId from RevenueCat: '{ProductType}', IsActive: {IsActive}, ExpiresAt: {ExpiresAt}",
-            mappedProduct, isActive, expiresAt);
+              "ProductId from RevenueCat: '{ProductType}', IsActive: {IsActive}, ExpiresAt: {ExpiresAt}",
+              mappedProduct,
+              isActive,
+              expiresAt);
 
+            break;
+
+          case "upgrade":
+            newSubscriptionType = mappedProduct;
+            break;
+
+          case "downgrade":
+            newSubscriptionType = SubscriptionType.Free;
+            break;
+
+          case "billing_issue":
+            newSubscriptionType = user.SubscriptionType;
             break;
 
           case "cancellation":
             var stillHasAccess = expiresAt != null && expiresAt > nowUtc;
+            cancellationStillHasAccess = stillHasAccess;
             newSubscriptionType = stillHasAccess ? user.SubscriptionType : SubscriptionType.Free;
             break;
 
@@ -100,7 +121,6 @@ public class RevenueCatFunctions(
             return req.CreateResponse(HttpStatusCode.OK);
         }
 
-
         if (user.SubscriptionType != newSubscriptionType || user.SubscriptionExpiresAt != expiresAt)
         {
           var update = new UpdateSubscriptionDto
@@ -112,8 +132,21 @@ public class RevenueCatFunctions(
           await adminService.UpdateUsersPlanAsync(user.Id!, update, ct);
           logger.LogInformation(
             "Updated user {UserId} to {Type}, expires {Expiry}",
-            user.Id, newSubscriptionType, expiresAt);
+            user.Id,
+            newSubscriptionType,
+            expiresAt);
         }
+
+        await QueueSubscriptionLifecycleEmailsAsync(
+          eventKind,
+          eventData,
+          user,
+          newSubscriptionType,
+          mappedProduct,
+          expiresAt,
+          purchaseRenewalUncancelActive,
+          cancellationStillHasAccess,
+          ct);
 
         return req.CreateResponse(HttpStatusCode.OK);
       },
@@ -121,6 +154,185 @@ public class RevenueCatFunctions(
       logger,
       env,
       returnHttp200OnUnhandledException: true);
+
+  private async Task QueueSubscriptionLifecycleEmailsAsync(
+    string eventKind,
+    EventData eventData,
+    User user,
+    SubscriptionType newSubscriptionType,
+    SubscriptionType mappedProduct,
+    DateTime? expiresAt,
+    bool? purchaseRenewalUncancelActive,
+    bool? cancellationStillHasAccess,
+    CancellationToken ct)
+  {
+    if (string.IsNullOrWhiteSpace(user.Email))
+    {
+      logger.LogWarning("Skipping subscription email: user {UserId} has no email", user.Id);
+      return;
+    }
+
+    var managementUrl = eventData.Subscriber?.ManagementUrl;
+
+    switch (eventKind)
+    {
+      case "billing_issue":
+        {
+          var grace = TryGetGracePeriodEndUtc(eventData);
+          await EnqueueSubscriptionEmailAsync(
+            user.Email,
+            "Rhema Bible — Action needed: billing problem",
+            EmailTemplates.BillingIssue(grace, managementUrl),
+            ct);
+          break;
+        }
+
+      case "expiration":
+        await EnqueueSubscriptionEmailAsync(
+          user.Email,
+          "Rhema Bible — Subscription expired",
+          EmailTemplates.SubscriptionExpired(),
+          ct);
+        break;
+
+      case "downgrade":
+        await EnqueueSubscriptionEmailAsync(
+          user.Email,
+          "Rhema Bible — Plan updated",
+          EmailTemplates.SubscriptionDowngraded(managementUrl),
+          ct);
+        break;
+
+      case "upgrade":
+        await EnqueueSubscriptionEmailAsync(
+          user.Email,
+          "Rhema Bible — Subscription upgraded",
+          EmailTemplates.SubscriptionUpgraded(newSubscriptionType, expiresAt, managementUrl),
+          ct);
+        break;
+
+      case "cancellation":
+        if (cancellationStillHasAccess == true && expiresAt.HasValue)
+        {
+          await EnqueueSubscriptionEmailAsync(
+            user.Email,
+            "Rhema Bible — Auto-renew turned off",
+            EmailTemplates.SubscriptionAutoRenewCancelled(expiresAt.Value, managementUrl),
+            ct);
+        }
+        else
+        {
+          await EnqueueSubscriptionEmailAsync(
+            user.Email,
+            "Rhema Bible — Subscription ended",
+            EmailTemplates.SubscriptionEndedAfterCancellation(managementUrl),
+            ct);
+        }
+
+        break;
+
+      case "initial_purchase":
+      case "non_renewing_purchase":
+        if (purchaseRenewalUncancelActive == true)
+        {
+          await EnqueueSubscriptionEmailAsync(
+            user.Email,
+            "Rhema Bible — Subscription activated",
+            EmailTemplates.SubscriptionPurchased(mappedProduct, expiresAt),
+            ct);
+        }
+        else
+        {
+          await EnqueueSubscriptionEmailAsync(
+            user.Email,
+            "Rhema Bible — Subscription expired",
+            EmailTemplates.SubscriptionExpired(),
+            ct);
+        }
+
+        break;
+
+      case "renewal":
+        if (purchaseRenewalUncancelActive == true)
+        {
+          await EnqueueSubscriptionEmailAsync(
+            user.Email,
+            "Rhema Bible — Subscription renewed",
+            EmailTemplates.SubscriptionRenewed(mappedProduct, expiresAt),
+            ct);
+        }
+        else
+        {
+          await EnqueueSubscriptionEmailAsync(
+            user.Email,
+            "Rhema Bible — Subscription expired",
+            EmailTemplates.SubscriptionExpired(),
+            ct);
+        }
+
+        break;
+
+      case "uncancellation":
+        if (purchaseRenewalUncancelActive == true)
+        {
+          await EnqueueSubscriptionEmailAsync(
+            user.Email,
+            "Rhema Bible — Subscription continues",
+            EmailTemplates.SubscriptionContinues(newSubscriptionType, expiresAt, managementUrl),
+            ct);
+        }
+
+        break;
+    }
+  }
+
+  private async Task EnqueueSubscriptionEmailAsync(string recipient, string subject, string htmlBody, CancellationToken ct)
+  {
+    var queueMessage = new EmailRequestFromQueueDto
+    {
+      Recipient = recipient.Trim(),
+      Subject = subject,
+      Body = htmlBody
+    };
+
+    await serviceBusService.PublishAsync(queueMessage, QueueNames.Email, ct);
+    logger.LogInformation("Queued subscription lifecycle email: {Subject}", subject);
+  }
+
+  private static DateTime? TryGetGracePeriodEndUtc(EventData e)
+  {
+    var sub = FindSubscriptionInfo(e);
+    if (sub == null) return null;
+    return ParseRevenueCatIsoDate(sub.GracePeriodExpiresDate);
+  }
+
+  private static SubscriptionInfo? FindSubscriptionInfo(EventData e)
+  {
+    if (e.Subscriber?.Subscriptions == null || string.IsNullOrEmpty(e.ProductId))
+      return null;
+
+    if (e.Subscriber.Subscriptions.TryGetValue(e.ProductId, out var direct))
+      return direct;
+
+    foreach (var kv in e.Subscriber.Subscriptions)
+    {
+      if (string.Equals(kv.Key, e.ProductId, StringComparison.OrdinalIgnoreCase))
+        return kv.Value;
+    }
+
+    return e.Subscriber.Subscriptions.Values.FirstOrDefault();
+  }
+
+  private static DateTime? ParseRevenueCatIsoDate(string? iso)
+  {
+    if (string.IsNullOrWhiteSpace(iso)) return null;
+    if (!DateTime.TryParse(iso, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var dt))
+      return null;
+
+    return dt.Kind == DateTimeKind.Unspecified
+      ? DateTime.SpecifyKind(dt, DateTimeKind.Utc)
+      : dt.ToUniversalTime();
+  }
 
   private static DateTime? FromUnixMs(long? ms)
   {
@@ -131,7 +343,7 @@ public class RevenueCatFunctions(
   private bool IsAuthorized(string authHeader)
   {
     if (string.IsNullOrEmpty(_revenueCatSettings.WebhookSecret))
-      return true;
+      return false;
 
     if (string.IsNullOrWhiteSpace(authHeader))
       return false;
@@ -160,8 +372,6 @@ public class RevenueCatFunctions(
       case "yearly":
 
         return SubscriptionType.PremiumYearly;
-
-
 
       default:
         logger.LogWarning("Unknown ProductId: {ProductId}", productId);
