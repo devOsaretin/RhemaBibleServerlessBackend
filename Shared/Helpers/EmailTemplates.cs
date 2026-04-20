@@ -118,6 +118,174 @@ public static class EmailTemplates
         return Layout("Subscription expired", "Your premium subscription has expired", body);
     }
 
+    public static string SubscriptionRenewed(SubscriptionType type, DateTime? expiresAtUtc)
+    {
+        var plan = ResolvePlanLabel(type, expiresAtUtc);
+        var expires = expiresAtUtc.HasValue
+            ? $"Next renewal / access through: <b>{expiresAtUtc.Value.ToUniversalTime():yyyy-MM-dd HH:mm} UTC</b>."
+            : "Your premium access remains active.";
+
+        var body = $"""
+<div style="color:rgb(31,41,55);font-size:15px;line-height:1.65;">
+  <div style="margin-bottom:10px;">Your subscription renewed successfully.</div>
+  <div style="padding:14px 16px;border-radius:12px;background:rgba(124,152,133,0.1);border:1px solid rgba(124,152,133,0.2);">
+    <div style="font-weight:700;margin-bottom:4px;">Plan</div>
+    <div style="color:#4F7457;font-weight:800;">{Escape(plan)}</div>
+    <div style="margin-top:10px;color:rgb(107,114,128);">{expires}</div>
+  </div>
+  <div style="margin-top:14px;color:rgb(107,114,128);">
+    Thank you for staying with Rhema Bible.
+  </div>
+</div>
+""";
+
+        return Layout("Subscription renewed", "Your Rhema Bible subscription renewed", body);
+    }
+
+    public static string BillingIssue(DateTime? gracePeriodExpiresAtUtc, string? managementUrl)
+    {
+        var grace = gracePeriodExpiresAtUtc.HasValue
+            ? $"<div style=\"margin-top:10px;color:rgb(107,114,128);\">If applicable, grace access may end: <b>{gracePeriodExpiresAtUtc.Value.ToUniversalTime():yyyy-MM-dd HH:mm} UTC</b>.</div>"
+            : "";
+
+        var body = $"""
+<div style="color:rgb(31,41,55);font-size:15px;line-height:1.65;">
+  <div style="margin-bottom:10px;">We hit a problem renewing your subscription payment.</div>
+  <div style="padding:14px 16px;border-radius:12px;background:rgba(234,179,8,0.12);border:1px solid rgba(234,179,8,0.35);">
+    <div style="font-weight:700;color:rgb(31,41,55);margin-bottom:6px;">What to do</div>
+    <div style="color:rgb(107,114,128);">Update your payment method with the App Store or Google Play (or restore purchases in the app) so your access is not interrupted.</div>
+    {grace}
+  </div>
+  {ManagementButton(managementUrl, "Update payment")}
+  <div style="margin-top:14px;color:rgb(107,114,128);">
+    If you already fixed this, you can ignore this message once billing succeeds.
+  </div>
+</div>
+""";
+
+        return Layout("Billing issue", "Please update your subscription payment", body);
+    }
+
+    public static string SubscriptionAutoRenewCancelled(DateTime accessThroughUtc, string? managementUrl)
+    {
+        var through = accessThroughUtc.ToUniversalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
+        var body = $"""
+<div style="color:rgb(31,41,55);font-size:15px;line-height:1.65;">
+  <div style="margin-bottom:10px;">Auto-renew has been turned off for your subscription.</div>
+  <div style="padding:14px 16px;border-radius:12px;background:rgba(124,152,133,0.1);border:1px solid rgba(124,152,133,0.2);">
+    <div style="font-weight:700;color:rgb(31,41,55);margin-bottom:6px;">Premium access</div>
+    <div style="color:rgb(107,114,128);">You keep premium features until <b>{through} UTC</b>, unless you subscribe again sooner.</div>
+  </div>
+  {ManagementButton(managementUrl, "Manage subscription")}
+  <div style="margin-top:14px;color:rgb(107,114,128);">
+    Changed your mind? You can turn auto-renew back on from your store subscription settings.
+  </div>
+</div>
+""";
+
+        return Layout("Auto-renew off", "Your subscription will not renew automatically", body);
+    }
+
+    public static string SubscriptionEndedAfterCancellation(string? managementUrl)
+    {
+        var body = $"""
+<div style="color:rgb(31,41,55);font-size:15px;line-height:1.65;">
+  <div style="margin-bottom:10px;">Your subscription has ended and your account is on the Free plan.</div>
+  <div style="padding:14px 16px;border-radius:12px;background:rgba(220,38,38,0.08);border:1px solid rgb(229,231,235);">
+    <div style="color:rgb(107,114,128);">Premium features are no longer active. You can subscribe again anytime in the app.</div>
+  </div>
+  {ManagementButton(managementUrl, "View subscription options")}
+</div>
+""";
+
+        return Layout("Subscription ended", "Your Rhema Bible subscription has ended", body);
+    }
+
+    public static string SubscriptionDowngraded(string? managementUrl)
+    {
+        var body = $"""
+<div style="color:rgb(31,41,55);font-size:15px;line-height:1.65;">
+  <div style="margin-bottom:10px;">Your plan has been downgraded.</div>
+  <div style="padding:14px 16px;border-radius:12px;background:rgba(124,152,133,0.08);border:1px solid rgba(124,152,133,0.2);">
+    <div style="font-weight:700;color:rgb(31,41,55);margin-bottom:6px;">Current plan</div>
+    <div style="color:rgb(107,114,128);">You are now on the <b>Free</b> plan.</div>
+  </div>
+  {ManagementButton(managementUrl, "Manage subscription")}
+</div>
+""";
+
+        return Layout("Plan updated", "Your Rhema Bible plan has changed", body);
+    }
+
+    public static string SubscriptionUpgraded(SubscriptionType type, DateTime? expiresAtUtc, string? managementUrl)
+    {
+        var plan = ResolvePlanLabel(type, expiresAtUtc);
+        var expires = expiresAtUtc.HasValue
+            ? $"Access / renewal reference: <b>{expiresAtUtc.Value.ToUniversalTime():yyyy-MM-dd HH:mm} UTC</b>."
+            : "Your upgraded access is active.";
+
+        var body = $"""
+<div style="color:rgb(31,41,55);font-size:15px;line-height:1.65;">
+  <div style="margin-bottom:10px;">Your subscription was upgraded.</div>
+  <div style="padding:14px 16px;border-radius:12px;background:rgba(212,175,55,0.1);border:1px solid rgba(212,175,55,0.2);">
+    <div style="font-weight:700;margin-bottom:4px;">Plan</div>
+    <div style="color:#4F7457;font-weight:800;">{Escape(plan)}</div>
+    <div style="margin-top:10px;color:rgb(107,114,128);">{expires}</div>
+  </div>
+  {ManagementButton(managementUrl, "Manage subscription")}
+</div>
+""";
+
+        return Layout("Subscription upgraded", "You are on a higher Rhema Bible plan", body);
+    }
+
+    public static string SubscriptionContinues(SubscriptionType type, DateTime? expiresAtUtc, string? managementUrl)
+    {
+        var plan = ResolvePlanLabel(type, expiresAtUtc);
+        var expires = expiresAtUtc.HasValue
+            ? $"Current period through: <b>{expiresAtUtc.Value.ToUniversalTime():yyyy-MM-dd HH:mm} UTC</b>."
+            : "Your subscription remains active.";
+
+        var body = $"""
+<div style="color:rgb(31,41,55);font-size:15px;line-height:1.65;">
+  <div style="margin-bottom:10px;">Good news — your subscription will continue.</div>
+  <div style="padding:14px 16px;border-radius:12px;background:rgba(124,152,133,0.1);border:1px solid rgba(124,152,133,0.2);">
+    <div style="font-weight:700;margin-bottom:4px;">Plan</div>
+    <div style="color:#4F7457;font-weight:800;">{Escape(plan)}</div>
+    <div style="margin-top:10px;color:rgb(107,114,128);">{expires}</div>
+  </div>
+  {ManagementButton(managementUrl, "Manage subscription")}
+</div>
+""";
+
+        return Layout("Subscription continues", "Your Rhema Bible subscription stays active", body);
+    }
+
+    private static string ManagementButton(string? managementUrl, string label)
+    {
+        if (!TrySanitizeHttpsUrl(managementUrl, out var href))
+            return "";
+
+        return $"""
+<div style="margin-top:16px;">
+  <a href="{href}" style="display:inline-block;padding:12px 18px;border-radius:12px;background:#4F7457;color:#FFFFFF;text-decoration:none;font-weight:700;font-size:14px;">{Escape(label)}</a>
+</div>
+""";
+    }
+
+    private static bool TrySanitizeHttpsUrl(string? url, out string escapedHref)
+    {
+        escapedHref = "";
+        if (string.IsNullOrWhiteSpace(url))
+            return false;
+
+        if (!Uri.TryCreate(url.Trim(), UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps)
+            return false;
+
+        escapedHref = Escape(uri.ToString());
+        return true;
+    }
+
     public static string PasswordChanged(DateTime changedAtUtc)
     {
         var when = changedAtUtc.ToUniversalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
