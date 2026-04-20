@@ -5,6 +5,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
+using RhemaBibleAppServerless.Application.Persistence;
 using RhemaBibleAppServerless.Domain.Enums;
 using RhemaBibleAppServerless.Domain.Models;
 
@@ -35,6 +36,7 @@ public class MyOpenAIClient : IAIClient
 
     private readonly HttpClient _httpClient;
     private readonly ICurrentUserService _currentUserService;
+    private readonly IUserPersistence _userPersistence;
     private readonly IServiceBusService _serviceBusService;
     private readonly IAiQuotaService _aiQuotaService;
     private readonly IPromptFileReader _promptFiles;
@@ -44,6 +46,7 @@ public class MyOpenAIClient : IAIClient
 
     public MyOpenAIClient(
         ICurrentUserService currentUserService,
+        IUserPersistence userPersistence,
         IServiceBusService serviceBusService,
         IAiQuotaService aiQuotaService,
         IPromptFileReader promptFiles,
@@ -53,6 +56,7 @@ public class MyOpenAIClient : IAIClient
         string model = "gpt-4o-mini")
     {
         _currentUserService = currentUserService;
+        _userPersistence = userPersistence;
         _httpClient = httpClient;
         _model = model;
         _serviceBusService = serviceBusService;
@@ -62,13 +66,24 @@ public class MyOpenAIClient : IAIClient
         _queryCacheOptions = queryCacheOptions;
     }
 
+    /// <summary>
+    /// Subscription and quota decisions must use a database-backed user row. The app-layer user cache can lag
+    /// for a short window after purchase, which previously caused premium accounts to consume free AI quota.
+    /// </summary>
+    private async Task<(User User, bool HasActivePremium)> GetUserForAiAsync(CancellationToken cancellationToken)
+    {
+        var principalUser = await _currentUserService.GetUserAsync(cancellationToken);
+        var fresh = await _userPersistence.GetByIdAsync(principalUser.Id!, cancellationToken);
+        var user = fresh ?? principalUser;
+        return (user, user.HasActivePremiumSubscription());
+    }
+
     public async Task<AiClientResult> GenerateAsync(string query, CancellationToken cancellationToken = default)
     {
-        var currentUser = await _currentUserService.GetUserAsync(cancellationToken);
-        var hasActivePremium = currentUser.HasActivePremiumSubscription();
+        var (user, hasActivePremium) = await GetUserForAiAsync(cancellationToken);
 
         // Subscribers: always premium prompts. Free tier within monthly allowance: same premium prompts.
-        var prompt = PromptHelper.GeneratePrompt(_promptFiles, query, currentUser.FirstName);
+        var prompt = PromptHelper.GeneratePrompt(_promptFiles, query, user.FirstName);
 
         var cacheOpts = _queryCacheOptions.CurrentValue;
         if (cacheOpts.Enabled &&
@@ -76,11 +91,11 @@ public class MyOpenAIClient : IAIClient
         {
             var usageNoConsume = hasActivePremium
                 ? new AiUsageDto { IsUnlimited = true }
-                : _aiQuotaService.BuildUsageSnapshot(currentUser);
+                : _aiQuotaService.BuildUsageSnapshot(user);
             return new AiClientResult(ParseCachedDataJson(cachedDataJson!), usageNoConsume);
         }
 
-        var usage = await ResolveUsageAsync(currentUser, hasActivePremium, cancellationToken);
+        var usage = await ResolveUsageAsync(user, hasActivePremium, cancellationToken);
 
         var payload = BuildPayload(prompt, stream: false);
 
@@ -97,7 +112,7 @@ public class MyOpenAIClient : IAIClient
             throw new InvalidOperationException($"OpenAI API call failed: {response.StatusCode}, {body}");
         }
 
-        await LogActivity(currentUser.Id!, query);
+        await LogActivity(user.Id!, query);
 
         var json = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: cancellationToken);
         var data = ParseChoicesContent(json, fallbackPropertyName: "text");
@@ -107,11 +122,10 @@ public class MyOpenAIClient : IAIClient
 
     public async Task<AiClientResult> GeneratePrayerAsync(string query, CancellationToken cancellationToken = default)
     {
-        var currentUser = await _currentUserService.GetUserAsync(cancellationToken);
-        var hasActivePremium = currentUser.HasActivePremiumSubscription();
-        var usage = await ResolveUsageAsync(currentUser, hasActivePremium, cancellationToken);
+        var (user, hasActivePremium) = await GetUserForAiAsync(cancellationToken);
+        var usage = await ResolveUsageAsync(user, hasActivePremium, cancellationToken);
 
-        var prompt = PromptHelper.GeneratePrayerPrompt(_promptFiles, query, currentUser.FirstName);
+        var prompt = PromptHelper.GeneratePrayerPrompt(_promptFiles, query, user.FirstName);
 
         var payload = BuildPayload(prompt, stream: false);
 
@@ -135,11 +149,10 @@ public class MyOpenAIClient : IAIClient
 
     public async Task<AiClientResult> GenerateChatAsync(string query, CancellationToken cancellationToken = default)
     {
-        var currentUser = await _currentUserService.GetUserAsync(cancellationToken);
-        var hasActivePremium = currentUser.HasActivePremiumSubscription();
-        var usage = await ResolveUsageAsync(currentUser, hasActivePremium, cancellationToken);
+        var (user, hasActivePremium) = await GetUserForAiAsync(cancellationToken);
+        var usage = await ResolveUsageAsync(user, hasActivePremium, cancellationToken);
 
-        var prompt = PromptHelper.GenerateChatPrompt(_promptFiles, query, currentUser.FirstName);
+        var prompt = PromptHelper.GenerateChatPrompt(_promptFiles, query, user.FirstName);
 
         var payload = BuildPayload(prompt, stream: false);
 
@@ -167,11 +180,10 @@ public class MyOpenAIClient : IAIClient
     {
         var (reference, verseText, userNote) = ApplyVerseRequestValidator.NormalizeOrThrow(request);
 
-        var currentUser = await _currentUserService.GetUserAsync(cancellationToken);
-        var hasActivePremium = currentUser.HasActivePremiumSubscription();
-        var usage = await ResolveUsageAsync(currentUser, hasActivePremium, cancellationToken);
+        var (user, hasActivePremium) = await GetUserForAiAsync(cancellationToken);
+        var usage = await ResolveUsageAsync(user, hasActivePremium, cancellationToken);
 
-        var prompt = PromptHelper.GenerateApplyVersePrompt(_promptFiles, reference, verseText, userNote, currentUser.FirstName);
+        var prompt = PromptHelper.GenerateApplyVersePrompt(_promptFiles, reference, verseText, userNote, user.FirstName);
 
         var payload = BuildPayload(prompt, stream: false);
 
@@ -188,7 +200,7 @@ public class MyOpenAIClient : IAIClient
             throw new InvalidOperationException($"OpenAI API call failed: {response.StatusCode}, {body}");
         }
 
-        await LogActivity(currentUser.Id!, $"Apply verse: {reference}");
+        await LogActivity(user.Id!, $"Apply verse: {reference}");
 
         var json = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: cancellationToken);
         var data = ParseChoicesContent(json, fallbackPropertyName: "lifeInsight");
@@ -199,13 +211,12 @@ public class MyOpenAIClient : IAIClient
         string query,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        var currentUser = await _currentUserService.GetUserAsync(cancellationToken);
-        var hasActivePremium = currentUser.HasActivePremiumSubscription();
-        var usage = await ResolveUsageAsync(currentUser, hasActivePremium, cancellationToken);
+        var (user, hasActivePremium) = await GetUserForAiAsync(cancellationToken);
+        var usage = await ResolveUsageAsync(user, hasActivePremium, cancellationToken);
         yield return new AiStreamUsagePart(usage);
 
-        var prompt = PromptHelper.GeneratePrompt(_promptFiles, query, currentUser.FirstName);
-        await foreach (var part in StreamCompletionCoreAsync(currentUser.Id!, query, prompt, cancellationToken))
+        var prompt = PromptHelper.GeneratePrompt(_promptFiles, query, user.FirstName);
+        await foreach (var part in StreamCompletionCoreAsync(user.Id!, query, prompt, cancellationToken))
             yield return part;
     }
 
@@ -213,13 +224,12 @@ public class MyOpenAIClient : IAIClient
         string query,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        var currentUser = await _currentUserService.GetUserAsync(cancellationToken);
-        var hasActivePremium = currentUser.HasActivePremiumSubscription();
-        var usage = await ResolveUsageAsync(currentUser, hasActivePremium, cancellationToken);
+        var (user, hasActivePremium) = await GetUserForAiAsync(cancellationToken);
+        var usage = await ResolveUsageAsync(user, hasActivePremium, cancellationToken);
         yield return new AiStreamUsagePart(usage);
 
-        var prompt = PromptHelper.GeneratePrayerPrompt(_promptFiles, query, currentUser.FirstName);
-        await foreach (var part in StreamCompletionCoreAsync(currentUser.Id!, query, prompt, cancellationToken))
+        var prompt = PromptHelper.GeneratePrayerPrompt(_promptFiles, query, user.FirstName);
+        await foreach (var part in StreamCompletionCoreAsync(user.Id!, query, prompt, cancellationToken))
             yield return part;
     }
 
@@ -227,13 +237,12 @@ public class MyOpenAIClient : IAIClient
         string query,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        var currentUser = await _currentUserService.GetUserAsync(cancellationToken);
-        var hasActivePremium = currentUser.HasActivePremiumSubscription();
-        var usage = await ResolveUsageAsync(currentUser, hasActivePremium, cancellationToken);
+        var (user, hasActivePremium) = await GetUserForAiAsync(cancellationToken);
+        var usage = await ResolveUsageAsync(user, hasActivePremium, cancellationToken);
         yield return new AiStreamUsagePart(usage);
 
-        var prompt = PromptHelper.GenerateChatPrompt(_promptFiles, query, currentUser.FirstName);
-        await foreach (var part in StreamCompletionCoreAsync(currentUser.Id!, query, prompt, cancellationToken))
+        var prompt = PromptHelper.GenerateChatPrompt(_promptFiles, query, user.FirstName);
+        await foreach (var part in StreamCompletionCoreAsync(user.Id!, query, prompt, cancellationToken))
             yield return part;
     }
 
@@ -241,18 +250,17 @@ public class MyOpenAIClient : IAIClient
         IReadOnlyList<ChatMessageDto> conversationMessages,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        var currentUser = await _currentUserService.GetUserAsync(cancellationToken);
-        var hasActivePremium = currentUser.HasActivePremiumSubscription();
-        var usage = await ResolveUsageAsync(currentUser, hasActivePremium, cancellationToken);
+        var (user, hasActivePremium) = await GetUserForAiAsync(cancellationToken);
+        var usage = await ResolveUsageAsync(user, hasActivePremium, cancellationToken);
         yield return new AiStreamUsagePart(usage);
 
-        var prompt = PromptHelper.GenerateConversationGospelChatPrompt(_promptFiles, conversationMessages, currentUser.FirstName);
+        var prompt = PromptHelper.GenerateConversationGospelChatPrompt(_promptFiles, conversationMessages, user.FirstName);
 
         var userQueryForLog = conversationMessages
             .LastOrDefault(m => string.Equals(m.Role, "user", StringComparison.OrdinalIgnoreCase))
             ?.Content ?? "(conversation)";
 
-        await foreach (var part in StreamCompletionCoreAsync(currentUser.Id!, userQueryForLog, prompt, cancellationToken))
+        await foreach (var part in StreamCompletionCoreAsync(user.Id!, userQueryForLog, prompt, cancellationToken))
             yield return part;
     }
 
@@ -344,14 +352,14 @@ public class MyOpenAIClient : IAIClient
         }
     }
 
-    private async Task<AiUsageDto> ResolveUsageAsync(User currentUser, bool hasActivePremium, CancellationToken cancellationToken)
+    private async Task<AiUsageDto> ResolveUsageAsync(User user, bool hasActivePremium, CancellationToken cancellationToken)
     {
         if (hasActivePremium)
         {
             return new AiUsageDto { IsUnlimited = true };
         }
 
-        var consumed = await _aiQuotaService.ConsumeFreeCallAsync(currentUser.Id!, cancellationToken);
+        var consumed = await _aiQuotaService.ConsumeFreeCallAsync(user.Id!, cancellationToken);
         return new AiUsageDto
         {
             IsUnlimited = false,
