@@ -42,7 +42,7 @@ public static class EmailTemplates
         sb.Append(contentHtml);
         sb.Append("""
           <div style="margin-top:18px;padding-top:16px;border-top:1px solid rgb(229,231,235);color:rgb(107,114,128);font-size:13px;line-height:1.5;">
-            <div style="margin-bottom:8px;">May the Lord bless you and keep you.</div>
+            <div style="margin-bottom:8px;font-style:italic;color:#4F7457;">&ldquo;Thy word is a lamp unto my feet, and a light unto my path.&rdquo; &mdash; Psalm 119:105</div>
             <div style="color:#9CA3AF;">If you need help, email <a href="mailto:support@rhemabible.app" style="color:#4F7457;text-decoration:none;font-weight:600;">support@rhemabible.app</a>.</div>
           </div>
         </div>
