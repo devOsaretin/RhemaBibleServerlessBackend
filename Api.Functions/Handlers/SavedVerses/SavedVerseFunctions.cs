@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging;
 
 public class SavedVerseFunctions(
   ISavedVerseService savedVerseService,
+  IUserApplicationService userService,
   IFunctionTokenValidator tokenValidator,
   ICurrentPrincipalAccessor principalAccessor,
   IHostEnvironment env,
@@ -23,7 +24,7 @@ public class SavedVerseFunctions(
 
       var verses = await savedVerseService.GetSavedVersesAsync(userId);
       return await req.CreateJsonResponse(HttpStatusCode.OK, ApiResponse<IReadOnlyList<SavedVerse>>.SuccessResponse(verses));
-    }, tokenValidator, principalAccessor, cancellationToken, logger, env);
+    }, tokenValidator, principalAccessor, userService, cancellationToken, logger, env);
 
   [Function("SavedVerse_AddVerse")]
   public Task<HttpResponseData> AddVerse(
@@ -36,7 +37,7 @@ public class SavedVerseFunctions(
 
       var result = await savedVerseService.AddVerseAsync(savedVerseDto, userId);
       return await req.CreateJsonResponse(HttpStatusCode.OK, ApiResponse<SavedVerse>.SuccessResponse(result));
-    }, tokenValidator, principalAccessor, cancellationToken, logger, env);
+    }, tokenValidator, principalAccessor, userService, cancellationToken, logger, env);
 
   [Function("SavedVerse_DeleteSavedVerse")]
   public Task<HttpResponseData> DeleteSavedVerse(
@@ -52,6 +53,6 @@ public class SavedVerseFunctions(
         return await req.CreateJsonResponse(HttpStatusCode.NotFound, ApiResponse<string>.ErrorResponse("Saved verse not found"));
 
       return await req.CreateJsonResponse(HttpStatusCode.OK, ApiResponse<string>.SuccessResponse("Saved verse deleted successfully"));
-    }, tokenValidator, principalAccessor, cancellationToken, logger, env);
+    }, tokenValidator, principalAccessor, userService, cancellationToken, logger, env);
 }
 

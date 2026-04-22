@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging;
 
 public class NoteFunctions(
   INoteService noteService,
+  IUserApplicationService userService,
   IFunctionTokenValidator tokenValidator,
   ICurrentPrincipalAccessor principalAccessor,
   IHostEnvironment env,
@@ -27,7 +28,7 @@ public class NoteFunctions(
       var pagedResult = await noteService.GetNotesAsync(userId, pageNumber, pageSize);
       var response = ApiResponse<List<Note>>.FromPagedResult(pagedResult);
       return await req.CreateJsonResponse(HttpStatusCode.OK, response);
-    }, tokenValidator, principalAccessor, cancellationToken, logger, env);
+    }, tokenValidator, principalAccessor, userService, cancellationToken, logger, env);
 
   [Function("Note_CreateNote")]
   public Task<HttpResponseData> CreateNote(
@@ -49,7 +50,7 @@ public class NoteFunctions(
       var res = await req.CreateJsonResponse(HttpStatusCode.Created, ApiResponse<Note>.SuccessResponse(created));
       res.Headers.Add("Location", $"/api/v1/note/{created.Id}");
       return res;
-    }, tokenValidator, principalAccessor, cancellationToken, logger, env);
+    }, tokenValidator, principalAccessor, userService, cancellationToken, logger, env);
 
   [Function("Note_GetNoteById")]
   public Task<HttpResponseData> GetNoteById(
@@ -70,7 +71,7 @@ public class NoteFunctions(
         return await req.CreateJsonResponse(HttpStatusCode.Forbidden, ApiResponse<Note>.ErrorResponse("You do not have access to this note."));
 
       return await req.CreateJsonResponse(HttpStatusCode.OK, ApiResponse<Note>.SuccessResponse(note));
-    }, tokenValidator, principalAccessor, cancellationToken, logger, env);
+    }, tokenValidator, principalAccessor, userService, cancellationToken, logger, env);
 
   [Function("Note_UpdateNote")]
   public Task<HttpResponseData> UpdateNote(
@@ -100,7 +101,7 @@ public class NoteFunctions(
         return await req.CreateJsonResponse(HttpStatusCode.NotFound, ApiResponse<string>.ErrorResponse("Note not found or you don't have permission"));
 
       return await req.CreateJsonResponse(HttpStatusCode.OK, ApiResponse<Note>.SuccessResponse(updated));
-    }, tokenValidator, principalAccessor, cancellationToken, logger, env);
+    }, tokenValidator, principalAccessor, userService, cancellationToken, logger, env);
 
   [Function("Note_DeleteNote")]
   public Task<HttpResponseData> DeleteNote(
@@ -115,6 +116,6 @@ public class NoteFunctions(
         return req.CreateResponse(HttpStatusCode.OK);
 
       return await req.CreateJsonResponse(HttpStatusCode.BadRequest, new { message = "Cannot delete note" });
-    }, tokenValidator, principalAccessor, cancellationToken, logger, env);
+    }, tokenValidator, principalAccessor, userService, cancellationToken, logger, env);
 }
 

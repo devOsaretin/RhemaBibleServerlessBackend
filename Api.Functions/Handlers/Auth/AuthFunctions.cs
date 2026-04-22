@@ -10,6 +10,7 @@ public class AuthFunctions(
   IAuthService authService,
   IFunctionTokenValidator tokenValidator,
   ICurrentPrincipalAccessor principalAccessor,
+  IUserApplicationService userService,
   IHostEnvironment env,
   ILogger<AuthFunctions> logger)
 {
@@ -94,7 +95,7 @@ public class AuthFunctions(
       var request = await req.ReadRequiredJsonAsync<ChangePasswordRequest>(ct);
       await authService.ChangePasswordAsync(userId, request, ct);
       return await req.CreateJsonResponse(HttpStatusCode.OK, ApiResponse.Success<string>("Password has been changed successfully."));
-    }, tokenValidator, principalAccessor, cancellationToken, logger, env);
+    }, tokenValidator, principalAccessor, userService, cancellationToken, logger, env);
 
   [Function("Auth_RefreshToken")]
   public Task<HttpResponseData> RefreshToken(
