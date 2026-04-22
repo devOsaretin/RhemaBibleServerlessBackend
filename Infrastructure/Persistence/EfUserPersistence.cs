@@ -17,6 +17,9 @@ public sealed class EfUserPersistence(RhemaDbContext db) : IUserPersistence
   public async Task<User?> GetByEmailAsync(string email, CancellationToken cancellationToken = default) =>
     await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Email == email && !u.IsDeleted, cancellationToken);
 
+  public async Task<User?> GetByEmailIncludingDeletedAsync(string email, CancellationToken cancellationToken = default) =>
+    await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Email == email, cancellationToken);
+
   public async Task InsertAsync(User user, CancellationToken cancellationToken = default)
   {
     if (string.IsNullOrEmpty(user.Id))
