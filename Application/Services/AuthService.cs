@@ -101,9 +101,16 @@ public class AuthService(
 
   public async Task<AuthResponse> RegisterAsync(RegisterRequest registerRequest, CancellationToken cancellationToken = default)
   {
-    var user = await userService.GetByEmailAsync(registerRequest.Email, cancellationToken);
+    // IMPORTANT: registration must check even soft-deleted users, otherwise the DB unique index
+    // throws a 500 and users get a generic error.
+    var existing = await users.GetByEmailIncludingDeletedAsync(registerRequest.Email, cancellationToken);
+    if (existing != null)
+    {
+      if (existing.IsDeleted)
+        throw new ConflictException("This email has an account scheduled for deletion. Contact support to restore it.");
 
-    if (user != null) throw new ConflictException("Email is already taken");
+      throw new ConflictException("Email is already taken");
+    }
 
     var newUser = await userService.FindOrCreateAsync(registerRequest, cancellationToken);
 
