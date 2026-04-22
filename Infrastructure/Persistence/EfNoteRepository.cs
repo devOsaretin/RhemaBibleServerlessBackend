@@ -20,6 +20,9 @@ public sealed class EfNoteRepository(RhemaDbContext db) : INoteRepository
     return n;
   }
 
+  public Task<int> DeleteAllByUserAsync(string userId, CancellationToken cancellationToken = default) =>
+    db.Notes.Where(x => x.AuthId == userId).ExecuteDeleteAsync(cancellationToken);
+
   public Task<Note?> GetByIdAsync(string noteId, CancellationToken cancellationToken = default) =>
     db.Notes.AsNoTracking().FirstOrDefaultAsync(x => x.Id == noteId, cancellationToken);
 
