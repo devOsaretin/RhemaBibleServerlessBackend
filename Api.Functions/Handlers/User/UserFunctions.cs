@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 public class UserFunctions(
   IUserApplicationService userService,
   IAiQuotaService aiQuotaService,
+  IAccountDeletionService accountDeletionService,
   IFunctionTokenValidator tokenValidator,
   ICurrentPrincipalAccessor principalAccessor,
   IHostEnvironment env,
@@ -72,6 +73,20 @@ public class UserFunctions(
       };
 
       return await req.CreateJsonResponse(HttpStatusCode.OK, ApiResponse<SubscriptionStatusDto>.SuccessResponse(subscriptionStatus));
+    }, tokenValidator, principalAccessor, cancellationToken, logger, env);
+
+  [Function("User_DeleteMyAccount")]
+  public Task<HttpResponseData> DeleteMyAccount(
+    [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "v1/user/me")] HttpRequestData req,
+    CancellationToken cancellationToken) =>
+    FunctionExecutionHelper.ExecuteWithAuthAsync(req, async (principal, ct) =>
+    {
+      var userId = principal.GetAuthenticatedUserId();
+      if (string.IsNullOrEmpty(userId))
+        return await req.CreateJsonResponse(HttpStatusCode.Unauthorized, ApiResponse.Error<string>("User id not found in token"));
+
+      await accountDeletionService.DeleteMyAccountAsync(userId, ct);
+      return req.CreateResponse(HttpStatusCode.NoContent);
     }, tokenValidator, principalAccessor, cancellationToken, logger, env);
 }
 

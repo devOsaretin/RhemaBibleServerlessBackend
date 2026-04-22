@@ -23,6 +23,9 @@ public sealed class EfSavedVerseRepository(RhemaDbContext db) : ISavedVerseRepos
     return n;
   }
 
+  public Task<int> DeleteAllByUserAsync(string userId, CancellationToken cancellationToken = default) =>
+    db.SavedVerses.Where(v => v.AuthId == userId).ExecuteDeleteAsync(cancellationToken);
+
   public Task<SavedVerse?> GetByIdAndUserAsync(string id, string userId, CancellationToken cancellationToken = default) =>
     db.SavedVerses.AsNoTracking().FirstOrDefaultAsync(x => x.AuthId == userId && x.Id == id, cancellationToken);
 
