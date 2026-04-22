@@ -11,6 +11,7 @@ using Microsoft.Extensions.Logging;
 public class AdminFunctions(
   IAdminService adminService,
   IUserApplicationService userService,
+  IAccountDeletionService accountDeletionService,
   IFunctionTokenValidator tokenValidator,
   ICurrentPrincipalAccessor principalAccessor,
   IHostEnvironment env,
@@ -181,6 +182,17 @@ public class AdminFunctions(
       var remainingThisMonth = int.TryParse(queryMap.TryGetValue("remainingThisMonth", out var rem) ? rem.ToString() : null, out var remaining) ? remaining : 0;
       var dto = await adminService.SetUserAiQuotaRemainingAsync(userId, remainingThisMonth, ct);
       return await req.CreateJsonResponse(HttpStatusCode.OK, ApiResponse<AdminUserAiQuotaDto>.SuccessResponse(dto));
+    }, cancellationToken, logger, env);
+
+  [Function("Admin_PurgeDeletedUsers")]
+  public Task<HttpResponseData> PurgeDeletedUsers(
+    [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "v1/admin/account-deletion/purge")] HttpRequestData req,
+    CancellationToken cancellationToken) =>
+    FunctionExecutionHelper.ExecuteAsync(req, async ct =>
+    {
+      await req.RequireAdminClerkUserAsync(tokenValidator, principalAccessor, userService, ct);
+      var purged = await accountDeletionService.PurgeExpiredAsync(DateTime.UtcNow, ct);
+      return await req.CreateJsonResponse(HttpStatusCode.OK, ApiResponse.Success(new { purged }));
     }, cancellationToken, logger, env);
 
   private static bool IsValid<T>(T model)
