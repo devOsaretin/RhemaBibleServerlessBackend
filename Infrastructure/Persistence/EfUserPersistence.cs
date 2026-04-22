@@ -9,13 +9,13 @@ namespace RhemaBibleAppServerless.Infrastructure.Persistence;
 public sealed class EfUserPersistence(RhemaDbContext db) : IUserPersistence
 {
   public async Task<List<User>> GetAllAsync(CancellationToken cancellationToken = default) =>
-    await db.Users.AsNoTracking().ToListAsync(cancellationToken);
+    await db.Users.AsNoTracking().Where(u => !u.IsDeleted).ToListAsync(cancellationToken);
 
   public async Task<User?> GetByIdAsync(string id, CancellationToken cancellationToken = default) =>
-    await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == id, cancellationToken);
+    await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == id && !u.IsDeleted, cancellationToken);
 
   public async Task<User?> GetByEmailAsync(string email, CancellationToken cancellationToken = default) =>
-    await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Email == email, cancellationToken);
+    await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Email == email && !u.IsDeleted, cancellationToken);
 
   public async Task InsertAsync(User user, CancellationToken cancellationToken = default)
   {
@@ -43,9 +43,32 @@ public sealed class EfUserPersistence(RhemaDbContext db) : IUserPersistence
     await db.Users.Where(u => u.Id == id).ExecuteDeleteAsync(cancellationToken);
   }
 
+  public async Task<bool> MarkDeletedAsync(string id, DateTime deletedAtUtc, CancellationToken cancellationToken = default)
+  {
+    var affected = await db.Users.Where(u => u.Id == id && !u.IsDeleted).ExecuteUpdateAsync(setters => setters
+        .SetProperty(u => u.IsDeleted, true)
+        .SetProperty(u => u.DeletedAt, deletedAtUtc)
+        .SetProperty(u => u.RefreshToken, string.Empty)
+        .SetProperty(u => u.RefreshTokenExpiryTime, deletedAtUtc)
+        .SetProperty(u => u.UpdatedAt, deletedAtUtc),
+      cancellationToken);
+
+    return affected > 0;
+  }
+
+  public async Task<IReadOnlyList<User>> ListUsersDueForPurgeAsync(DateTime purgeBeforeUtc, int take, CancellationToken cancellationToken = default)
+  {
+    take = Math.Clamp(take, 1, 500);
+    return await db.Users.AsNoTracking()
+      .Where(u => u.IsDeleted && u.DeletedAt != null && u.DeletedAt < purgeBeforeUtc)
+      .OrderBy(u => u.DeletedAt)
+      .Take(take)
+      .ToListAsync(cancellationToken);
+  }
+
   public async Task<User?> GetByRefreshTokenAsync(string refreshToken, DateTime utcNow, CancellationToken cancellationToken = default) =>
     await db.Users.AsNoTracking().FirstOrDefaultAsync(
-      u => u.RefreshToken == refreshToken && u.RefreshTokenExpiryTime > utcNow,
+      u => u.RefreshToken == refreshToken && u.RefreshTokenExpiryTime > utcNow && !u.IsDeleted,
       cancellationToken);
 
   public async Task UpdateRefreshTokenAsync(string userId, string refreshToken, DateTime refreshTokenExpiry, CancellationToken cancellationToken = default) =>
@@ -95,6 +118,7 @@ public sealed class EfUserPersistence(RhemaDbContext db) : IUserPersistence
     var skip = (pageNumber - 1) * pageSize;
 
     var q = db.Users.AsNoTracking().AsQueryable();
+    q = q.Where(u => !u.IsDeleted);
 
     if (!string.IsNullOrWhiteSpace(query.Status))
     {

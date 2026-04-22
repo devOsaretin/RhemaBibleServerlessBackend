@@ -20,4 +20,7 @@ public sealed class EfRecentActivityRepository(RhemaDbContext db) : IRecentActiv
       .OrderByDescending(a => a.CreatedAt)
       .Take(take)
       .ToListAsync(cancellationToken);
+
+  public Task<int> DeleteAllByUserAsync(string userId, CancellationToken cancellationToken = default) =>
+    db.RecentActivities.Where(a => a.AuthId == userId).ExecuteDeleteAsync(cancellationToken);
 }

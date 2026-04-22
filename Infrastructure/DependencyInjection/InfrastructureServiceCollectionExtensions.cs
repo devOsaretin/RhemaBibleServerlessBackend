@@ -23,6 +23,7 @@ public static class InfrastructureServiceCollectionExtensions
     services.Configure<AzureBlobTtsOptions>(config.GetSection(AzureBlobTtsOptions.SectionName));
     services.Configure<AiQueryCacheOptions>(config.GetSection(AiQueryCacheOptions.SectionName));
     services.Configure<AiQuotaOptions>(config.GetSection(AiQuotaOptions.SectionName));
+    services.Configure<AccountDeletionOptions>(config.GetSection(AccountDeletionOptions.SectionName));
 
     services.AddDbContext<RhemaDbContext>((sp, o) =>
     {

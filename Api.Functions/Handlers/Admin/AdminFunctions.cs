@@ -10,6 +10,8 @@ using Microsoft.Extensions.Logging;
 
 public class AdminFunctions(
   IAdminService adminService,
+  IUserApplicationService userService,
+  IAccountDeletionService accountDeletionService,
   IFunctionTokenValidator tokenValidator,
   ICurrentPrincipalAccessor principalAccessor,
   IHostEnvironment env,
@@ -21,7 +23,7 @@ public class AdminFunctions(
     CancellationToken cancellationToken) =>
     FunctionExecutionHelper.ExecuteAsync(req, async ct =>
     {
-      var principal = await req.RequireAdminClerkUserAsync(tokenValidator, principalAccessor, ct);
+      var principal = await req.RequireAdminClerkUserAsync(tokenValidator, principalAccessor, userService, ct);
       var userId = principal.GetRequiredClaim(ClaimTypes.NameIdentifier);
       var admin = await adminService.GetAdminAsync(userId);
       return await req.CreateJsonResponse(HttpStatusCode.OK, ApiResponse<UserDto>.SuccessResponse(admin!));
@@ -33,7 +35,7 @@ public class AdminFunctions(
     CancellationToken cancellationToken) =>
     FunctionExecutionHelper.ExecuteAsync(req, async ct =>
     {
-      await req.RequireAdminClerkUserAsync(tokenValidator, principalAccessor, ct);
+      await req.RequireAdminClerkUserAsync(tokenValidator, principalAccessor, userService, ct);
 
       var queryMap = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(req.Url.Query);
       var query = new UserQueryDto
@@ -62,7 +64,7 @@ public class AdminFunctions(
     CancellationToken cancellationToken) =>
     FunctionExecutionHelper.ExecuteAsync(req, async ct =>
     {
-      await req.RequireAdminClerkUserAsync(tokenValidator, principalAccessor, ct);
+      await req.RequireAdminClerkUserAsync(tokenValidator, principalAccessor, userService, ct);
       var user = await adminService.GetUserAsync(userId, ct);
       if (user == null)
         return await req.CreateJsonResponse(HttpStatusCode.NotFound, ApiResponse<UserDto>.ErrorResponse("User not found"));
@@ -77,7 +79,7 @@ public class AdminFunctions(
     CancellationToken cancellationToken) =>
     FunctionExecutionHelper.ExecuteAsync(req, async ct =>
     {
-      await req.RequireAdminClerkUserAsync(tokenValidator, principalAccessor, ct);
+      await req.RequireAdminClerkUserAsync(tokenValidator, principalAccessor, userService, ct);
       return await req.CreateJsonResponse(HttpStatusCode.OK, ApiResponse<UserDto>.SuccessResponse(await adminService.ActivateUserAsync(userId)));
     }, cancellationToken, logger, env);
 
@@ -88,7 +90,7 @@ public class AdminFunctions(
     CancellationToken cancellationToken) =>
     FunctionExecutionHelper.ExecuteAsync(req, async ct =>
     {
-      await req.RequireAdminClerkUserAsync(tokenValidator, principalAccessor, ct);
+      await req.RequireAdminClerkUserAsync(tokenValidator, principalAccessor, userService, ct);
       return await req.CreateJsonResponse(HttpStatusCode.OK, ApiResponse<UserDto>.SuccessResponse(await adminService.DeactivateUserAsync(userId)));
     }, cancellationToken, logger, env);
 
@@ -99,7 +101,7 @@ public class AdminFunctions(
     CancellationToken cancellationToken) =>
     FunctionExecutionHelper.ExecuteAsync(req, async ct =>
     {
-      await req.RequireAdminClerkUserAsync(tokenValidator, principalAccessor, ct);
+      await req.RequireAdminClerkUserAsync(tokenValidator, principalAccessor, userService, ct);
       var subscriptionDto = await req.ReadRequiredJsonAsync<UpdateSubscriptionDto>(ct);
       if (!IsValid(subscriptionDto))
         return await req.CreateJsonResponse(HttpStatusCode.BadRequest, ApiResponse<UserDto>.ErrorResponse("Invalid subscription data"));
@@ -114,7 +116,7 @@ public class AdminFunctions(
     CancellationToken cancellationToken) =>
     FunctionExecutionHelper.ExecuteAsync(req, async ct =>
     {
-      await req.RequireAdminClerkUserAsync(tokenValidator, principalAccessor, ct);
+      await req.RequireAdminClerkUserAsync(tokenValidator, principalAccessor, userService, ct);
       return await req.CreateJsonResponse(HttpStatusCode.OK, ApiResponse<DashboardAnalyticsDto>.SuccessResponse(await adminService.GetDashboardAnalyticsAsync()));
     }, cancellationToken, logger, env);
 
@@ -124,7 +126,7 @@ public class AdminFunctions(
     CancellationToken cancellationToken) =>
     FunctionExecutionHelper.ExecuteAsync(req, async ct =>
     {
-      await req.RequireAdminClerkUserAsync(tokenValidator, principalAccessor, ct);
+      await req.RequireAdminClerkUserAsync(tokenValidator, principalAccessor, userService, ct);
       var queryMap = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(req.Url.Query);
       var format = queryMap.TryGetValue("format", out var fmt) ? fmt.ToString() : null;
       var stats = await adminService.GetDashboardStatisticsExportAsync(ct);
@@ -151,7 +153,7 @@ public class AdminFunctions(
     CancellationToken cancellationToken) =>
     FunctionExecutionHelper.ExecuteAsync(req, async ct =>
     {
-      await req.RequireAdminClerkUserAsync(tokenValidator, principalAccessor, ct);
+      await req.RequireAdminClerkUserAsync(tokenValidator, principalAccessor, userService, ct);
       var dto = await adminService.GetUserAiQuotaAsync(userId, ct);
       return await req.CreateJsonResponse(HttpStatusCode.OK, ApiResponse<AdminUserAiQuotaDto>.SuccessResponse(dto));
     }, cancellationToken, logger, env);
@@ -163,7 +165,7 @@ public class AdminFunctions(
     CancellationToken cancellationToken) =>
     FunctionExecutionHelper.ExecuteAsync(req, async ct =>
     {
-      await req.RequireAdminClerkUserAsync(tokenValidator, principalAccessor, ct);
+      await req.RequireAdminClerkUserAsync(tokenValidator, principalAccessor, userService, ct);
       var dto = await adminService.ResetUserAiQuotaAsync(userId, ct);
       return await req.CreateJsonResponse(HttpStatusCode.OK, ApiResponse<AdminUserAiQuotaDto>.SuccessResponse(dto));
     }, cancellationToken, logger, env);
@@ -175,11 +177,22 @@ public class AdminFunctions(
     CancellationToken cancellationToken) =>
     FunctionExecutionHelper.ExecuteAsync(req, async ct =>
     {
-      await req.RequireAdminClerkUserAsync(tokenValidator, principalAccessor, ct);
+      await req.RequireAdminClerkUserAsync(tokenValidator, principalAccessor, userService, ct);
       var queryMap = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(req.Url.Query);
       var remainingThisMonth = int.TryParse(queryMap.TryGetValue("remainingThisMonth", out var rem) ? rem.ToString() : null, out var remaining) ? remaining : 0;
       var dto = await adminService.SetUserAiQuotaRemainingAsync(userId, remainingThisMonth, ct);
       return await req.CreateJsonResponse(HttpStatusCode.OK, ApiResponse<AdminUserAiQuotaDto>.SuccessResponse(dto));
+    }, cancellationToken, logger, env);
+
+  [Function("Admin_PurgeDeletedUsers")]
+  public Task<HttpResponseData> PurgeDeletedUsers(
+    [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "v1/admin/account-deletion/purge")] HttpRequestData req,
+    CancellationToken cancellationToken) =>
+    FunctionExecutionHelper.ExecuteAsync(req, async ct =>
+    {
+      await req.RequireAdminClerkUserAsync(tokenValidator, principalAccessor, userService, ct);
+      var purged = await accountDeletionService.PurgeExpiredAsync(DateTime.UtcNow, ct);
+      return await req.CreateJsonResponse(HttpStatusCode.OK, ApiResponse.Success(new { purged }));
     }, cancellationToken, logger, env);
 
   private static bool IsValid<T>(T model)

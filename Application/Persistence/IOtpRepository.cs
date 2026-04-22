@@ -7,4 +7,5 @@ public interface IOtpRepository
   Task<OtpCode?> FindByCodeAndTypeAsync(string code, OtpType type, string email, CancellationToken cancellationToken = default);
   Task IncrementAttemptsAsync(string otpId, CancellationToken cancellationToken = default);
   Task<bool> MarkUsedAsync(string otpId, CancellationToken cancellationToken = default);
+  Task<int> DeleteAllByUserAsync(string userId, CancellationToken cancellationToken = default);
 }

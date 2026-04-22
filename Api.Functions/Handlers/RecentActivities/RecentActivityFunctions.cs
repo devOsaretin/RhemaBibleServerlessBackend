@@ -12,6 +12,7 @@ using RhemaBibleAppServerless.Domain.Enums;
 public class RecentActivityFunctions(
   IRecentActivityService recentActivityService,
   IProcessedServiceBusDeliveryRepository processedServiceBusDeliveries,
+  IUserApplicationService userService,
   IFunctionTokenValidator tokenValidator,
   ICurrentPrincipalAccessor principalAccessor,
   IHostEnvironment env,
@@ -27,7 +28,7 @@ public class RecentActivityFunctions(
 
       var activities = await recentActivityService.GetRecentActivitiesByUserAsync(userId);
       return await req.CreateJsonResponse(HttpStatusCode.OK, ApiResponse<IReadOnlyList<RecentActivity>>.SuccessResponse(activities));
-    }, tokenValidator, principalAccessor, cancellationToken, logger, env);
+    }, tokenValidator, principalAccessor, userService, cancellationToken, logger, env);
 
   [Function("RecentActivity_AddUserActivity")]
   public Task<HttpResponseData> AddUserActivity(
@@ -47,7 +48,7 @@ public class RecentActivityFunctions(
 
       var activity = await recentActivityService.AddActivityByUser(newActivity);
       return await req.CreateJsonResponse(HttpStatusCode.OK, ApiResponse<RecentActivity>.SuccessResponse(activity));
-    }, tokenValidator, principalAccessor, cancellationToken, logger, env);
+    }, tokenValidator, principalAccessor, userService, cancellationToken, logger, env);
 
 
   [Function("ProcessActivity")]

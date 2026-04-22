@@ -305,6 +305,53 @@ public static class EmailTemplates
         return Layout("Password updated", "Your Rhema Bible password was changed", body);
     }
 
+    public static string AccountDeleted(DateTime deletedAtUtc)
+    {
+        var when = deletedAtUtc.ToUniversalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
+        var body = $"""
+<div style="color:rgb(31,41,55);font-size:15px;line-height:1.65;">
+  <div style="margin-bottom:10px;">Your Rhema Bible account has been deleted.</div>
+  <div style="padding:14px 16px;border-radius:12px;background:rgba(220,38,38,0.08);border:1px solid rgb(229,231,235);">
+    <div style="font-weight:700;color:rgb(31,41,55);margin-bottom:6px;">Deletion time</div>
+    <div style="color:rgb(107,114,128);">{when} UTC</div>
+  </div>
+  <div style="margin-top:14px;color:rgb(107,114,128);">
+    If you didn’t request this, contact support immediately.
+  </div>
+</div>
+""";
+
+        return Layout("Account deleted", "Your Rhema Bible account has been deleted", body);
+    }
+
+    public static string AccountDeletionRequested(DateTime requestedAtUtc, int graceDays)
+    {
+        var when = requestedAtUtc.ToUniversalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
+        var window = graceDays switch
+        {
+            <= 0 => "soon",
+            1 => "after 1 day",
+            _ => $"after {graceDays} days"
+        };
+
+        var body = $"""
+<div style="color:rgb(31,41,55);font-size:15px;line-height:1.65;">
+  <div style="margin-bottom:10px;">We received a request to delete your Rhema Bible account.</div>
+  <div style="padding:14px 16px;border-radius:12px;background:rgba(234,179,8,0.12);border:1px solid rgba(234,179,8,0.35);">
+    <div style="font-weight:700;color:rgb(31,41,55);margin-bottom:6px;">What happens now</div>
+    <div style="color:rgb(107,114,128);">Your account is now signed out and inaccessible.</div>
+    <div style="margin-top:10px;color:rgb(107,114,128);">Permanent deletion will occur {window}.</div>
+    <div style="margin-top:10px;color:rgb(107,114,128);">Request time: <b>{when} UTC</b></div>
+  </div>
+  <div style="margin-top:14px;color:rgb(107,114,128);">
+    If you didn’t request this, contact support immediately.
+  </div>
+</div>
+""";
+
+        return Layout("Deletion requested", "We received a request to delete your account", body);
+    }
+
     private static string Escape(string s) =>
         s.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;").Replace("\"", "&quot;");
 

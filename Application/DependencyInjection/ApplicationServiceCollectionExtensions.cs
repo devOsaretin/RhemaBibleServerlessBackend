@@ -19,6 +19,7 @@ public static class ApplicationServiceCollectionExtensions
     services.AddScoped<IJwtService, JwtService>();
     services.AddScoped<IPasswordHasher, PasswordHasher>();
     services.AddScoped<ICurrentUserService, CurrentUserService>();
+    services.AddScoped<IAccountDeletionService, AccountDeletionService>();
     services.AddSingleton<IUrlService, UrlService>();
 
     return services;

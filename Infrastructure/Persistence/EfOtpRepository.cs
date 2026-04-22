@@ -39,4 +39,7 @@ public sealed class EfOtpRepository(RhemaDbContext db) : IOtpRepository
     return affected > 0;
   }
 
+  public Task<int> DeleteAllByUserAsync(string userId, CancellationToken cancellationToken = default) =>
+    db.OtpCodes.Where(o => o.UserId == userId).ExecuteDeleteAsync(cancellationToken);
+
 }
