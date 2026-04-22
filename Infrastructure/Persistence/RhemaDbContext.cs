@@ -30,6 +30,9 @@ public sealed class RhemaDbContext(DbContextOptions<RhemaDbContext> options) : D
       e.Property(x => x.SubscriptionType).HasConversion<string>().HasMaxLength(64);
       e.Property(x => x.Status).HasConversion<string>().HasMaxLength(64);
       e.Property(x => x.AiFreeCallsMonthKey).HasMaxLength(32);
+      e.Property(x => x.IsDeleted).HasDefaultValue(false);
+      e.Property(x => x.DeletedAt);
+      e.HasIndex(x => x.IsDeleted);
     });
 
     modelBuilder.Entity<Note>(e =>

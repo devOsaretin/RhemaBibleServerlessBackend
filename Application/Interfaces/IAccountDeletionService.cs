@@ -1,5 +1,6 @@
 public interface IAccountDeletionService
 {
-  Task DeleteMyAccountAsync(string userId, CancellationToken cancellationToken = default);
+  Task RequestDeletionAsync(string userId, CancellationToken cancellationToken = default);
+  Task<int> PurgeExpiredAsync(DateTime utcNow, CancellationToken cancellationToken = default);
 }
 

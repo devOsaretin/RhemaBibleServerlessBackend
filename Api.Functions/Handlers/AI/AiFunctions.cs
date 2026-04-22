@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 
 public class AiFunctions(
   IAIClient aiClient,
+  IUserApplicationService userService,
   IFunctionTokenValidator tokenValidator,
   ICurrentPrincipalAccessor principalAccessor,
   ILogger<AiFunctions> logger,
@@ -31,6 +32,7 @@ public class AiFunctions(
       },
       tokenValidator,
       principalAccessor,
+      userService,
       cancellationToken,
       logger,
       env);
@@ -49,6 +51,7 @@ public class AiFunctions(
       },
       tokenValidator,
       principalAccessor,
+      userService,
       cancellationToken,
       logger,
       env);
@@ -67,6 +70,7 @@ public class AiFunctions(
       },
       tokenValidator,
       principalAccessor,
+      userService,
       cancellationToken,
       logger,
       env);
@@ -86,6 +90,7 @@ public class AiFunctions(
       },
       tokenValidator,
       principalAccessor,
+      userService,
       cancellationToken,
       logger,
       env);
@@ -105,6 +110,7 @@ public class AiFunctions(
       },
       tokenValidator,
       principalAccessor,
+      userService,
       cancellationToken,
       logger,
       env);
@@ -124,6 +130,7 @@ public class AiFunctions(
       },
       tokenValidator,
       principalAccessor,
+      userService,
       cancellationToken,
       logger,
       env);
@@ -144,6 +151,7 @@ public class AiFunctions(
       },
       tokenValidator,
       principalAccessor,
+      userService,
       cancellationToken,
       logger,
       env);
@@ -162,6 +170,7 @@ public class AiFunctions(
       },
       tokenValidator,
       principalAccessor,
+      userService,
       cancellationToken,
       logger,
       env);

@@ -33,6 +33,10 @@ public class User
 
   public bool IsEmailVerified { get; set; }
 
+  public bool IsDeleted { get; set; }
+
+  public DateTime? DeletedAt { get; set; }
+
   public DateTime? SubscriptionExpiresAt { get; set; }
 
   public string? AiFreeCallsMonthKey { get; set; }

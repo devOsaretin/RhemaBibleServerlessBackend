@@ -112,7 +112,7 @@ public class MyOpenAIClient : IAIClient
             throw new InvalidOperationException($"OpenAI API call failed: {response.StatusCode}, {body}");
         }
 
-        await LogActivity(user.Id!, query);
+        // Intentionally do not log AI chats/analysis as recent activity.
 
         var json = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: cancellationToken);
         var data = ParseChoicesContent(json, fallbackPropertyName: "text");
@@ -200,7 +200,7 @@ public class MyOpenAIClient : IAIClient
             throw new InvalidOperationException($"OpenAI API call failed: {response.StatusCode}, {body}");
         }
 
-        await LogActivity(user.Id!, $"Apply verse: {reference}");
+        await LogReflectVerseActivity(user.Id!, reference, cancellationToken);
 
         var json = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: cancellationToken);
         var data = ParseChoicesContent(json, fallbackPropertyName: "lifeInsight");
@@ -290,7 +290,7 @@ public class MyOpenAIClient : IAIClient
             throw new InvalidOperationException($"OpenAI API call failed: {response.StatusCode}, {body}");
         }
 
-        await LogActivity(userId, userQuery);
+        // Intentionally do not log AI chats/analysis as recent activity.
 
         await using var responseStream = await response.Content.ReadAsStreamAsync(cancellationToken);
 
@@ -458,14 +458,14 @@ public class MyOpenAIClient : IAIClient
         throw new InvalidOperationException("Unexpected OpenAI response structure: " + json);
     }
 
-    private async Task LogActivity(string userId, string query)
+    private Task LogReflectVerseActivity(string userId, string reference, CancellationToken cancellationToken)
     {
         var activity = new AddActivityToQueueDto
         {
             AuthId = userId,
             ActivityType = ActivityType.AIAnalysis.ToString(),
-            Title = $"AI Analysis: {query}"
+            Title = $"Reflect Verse: {reference}"
         };
-        await _serviceBusService.PublishAsync(activity, QueueNames.Activity);
+        return _serviceBusService.PublishAsync(activity, QueueNames.Activity, cancellationToken);
     }
 }

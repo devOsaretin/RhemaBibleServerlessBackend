@@ -32,7 +32,7 @@ public class UserFunctions(
         return await req.CreateJsonResponse(HttpStatusCode.NotFound, ApiResponse<UserDto>.ErrorResponse("User not found"));
 
       return await req.CreateJsonResponse(HttpStatusCode.OK, ApiResponse<UserDto>.SuccessResponse(user.ToDto(aiQuotaService)));
-    }, tokenValidator, principalAccessor, cancellationToken, logger, env);
+    }, tokenValidator, principalAccessor, userService, cancellationToken, logger, env);
 
   [Function("User_GetMyProfile")]
   public Task<HttpResponseData> GetMyProfile(
@@ -49,7 +49,7 @@ public class UserFunctions(
         return await req.CreateJsonResponse(HttpStatusCode.NotFound, ApiResponse<UserDto>.ErrorResponse("User not found"));
 
       return await req.CreateJsonResponse(HttpStatusCode.OK, ApiResponse<UserDto>.SuccessResponse(user.ToDto(aiQuotaService)));
-    }, tokenValidator, principalAccessor, cancellationToken, logger, env);
+    }, tokenValidator, principalAccessor, userService, cancellationToken, logger, env);
 
   [Function("User_GetMySubscription")]
   public Task<HttpResponseData> GetMySubscription(
@@ -73,7 +73,7 @@ public class UserFunctions(
       };
 
       return await req.CreateJsonResponse(HttpStatusCode.OK, ApiResponse<SubscriptionStatusDto>.SuccessResponse(subscriptionStatus));
-    }, tokenValidator, principalAccessor, cancellationToken, logger, env);
+    }, tokenValidator, principalAccessor, userService, cancellationToken, logger, env);
 
   [Function("User_DeleteMyAccount")]
   public Task<HttpResponseData> DeleteMyAccount(
@@ -85,8 +85,8 @@ public class UserFunctions(
       if (string.IsNullOrEmpty(userId))
         return await req.CreateJsonResponse(HttpStatusCode.Unauthorized, ApiResponse.Error<string>("User id not found in token"));
 
-      await accountDeletionService.DeleteMyAccountAsync(userId, ct);
+      await accountDeletionService.RequestDeletionAsync(userId, ct);
       return req.CreateResponse(HttpStatusCode.NoContent);
-    }, tokenValidator, principalAccessor, cancellationToken, logger, env);
+    }, tokenValidator, principalAccessor, userService, cancellationToken, logger, env);
 }
 

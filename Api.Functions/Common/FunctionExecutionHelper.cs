@@ -74,6 +74,7 @@ public static class FunctionExecutionHelper
     Func<ClaimsPrincipal, CancellationToken, Task<HttpResponseData>> action,
     IFunctionTokenValidator tokenValidator,
     ICurrentPrincipalAccessor principalAccessor,
+    IUserApplicationService userService,
     CancellationToken cancellationToken,
     ILogger logger,
     IHostEnvironment env)
@@ -81,6 +82,15 @@ public static class FunctionExecutionHelper
     try
     {
       var principal = req.RequireLocalJwtUser(tokenValidator, principalAccessor);
+      var userId = principal.GetAuthenticatedUserId();
+      if (string.IsNullOrWhiteSpace(userId))
+        throw new UnauthorizedAccessException("User id not found in token");
+
+      // IMPORTANT: this is how we revoke access for soft-deleted accounts.
+      var user = await userService.GetByIdAsync(userId, cancellationToken);
+      if (user == null)
+        throw new UnauthorizedAccessException("Account is deleted or unavailable");
+
       return await action(principal, cancellationToken);
     }
     catch (Exception ex)

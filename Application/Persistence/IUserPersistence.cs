@@ -8,6 +8,8 @@ public interface IUserPersistence
   Task InsertAsync(User user, CancellationToken cancellationToken = default);
   Task ReplaceAsync(string id, User user, CancellationToken cancellationToken = default);
   Task DeleteAsync(string id, CancellationToken cancellationToken = default);
+  Task<bool> MarkDeletedAsync(string id, DateTime deletedAtUtc, CancellationToken cancellationToken = default);
+  Task<IReadOnlyList<User>> ListUsersDueForPurgeAsync(DateTime purgeBeforeUtc, int take, CancellationToken cancellationToken = default);
 
   Task<User?> GetByRefreshTokenAsync(string refreshToken, DateTime utcNow, CancellationToken cancellationToken = default);
   Task UpdateRefreshTokenAsync(string userId, string refreshToken, DateTime refreshTokenExpiry, CancellationToken cancellationToken = default);

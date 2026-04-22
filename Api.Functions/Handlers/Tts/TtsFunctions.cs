@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 public class TtsFunctions(
   ITextToSpeechService textToSpeechService,
   IUrlService urlService,
+  IUserApplicationService userService,
   IFunctionTokenValidator tokenValidator,
   ICurrentPrincipalAccessor principalAccessor,
   IHostEnvironment env,
@@ -23,6 +24,6 @@ public class TtsFunctions(
       var cdnAudioUrl = urlService.ToCdn(result.AudioUrl);
       result.AudioUrl = cdnAudioUrl;
       return await req.CreateJsonResponse(HttpStatusCode.OK, ApiResponse<TextToSpeechResponse>.SuccessResponse(result));
-    }, tokenValidator, principalAccessor, cancellationToken, logger, env);
+    }, tokenValidator, principalAccessor, userService, cancellationToken, logger, env);
 }
 
