@@ -1,0 +1,717 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Rhema Bible Serverless API",
+    "version": "1.0.0",
+    "description": "Azure Functions HTTP API (`/api` prefix). Authenticated routes validate JWT and load the user from the database (soft-deleted users are rejected). JSON bodies use **camelCase** property names. Enums serialize as **PascalCase** strings (`JsonStringEnumConverter` without a naming policy), matching `Api.Functions/Program.cs` worker JSON options."
+  },
+  "servers": [{ "url": "/api", "description": "Functions HTTP route prefix" }],
+  "tags": [
+    { "name": "Health" },
+    { "name": "Auth" },
+    { "name": "User" },
+    { "name": "AI" },
+    { "name": "Notes" },
+    { "name": "Saved verses" },
+    { "name": "Recent activity" },
+    { "name": "TTS" },
+    { "name": "Admin" },
+    { "name": "Webhooks" }
+  ],
+  "paths": {
+    "/v1/health": {
+      "get": {
+        "tags": ["Health"],
+        "summary": "Health check",
+        "responses": { "200": { "description": "Service status and build version" } }
+      }
+    },
+    "/v1/auth/login": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Login",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LoginRequest" } } }
+        },
+        "responses": { "200": { "description": "Auth tokens" }, "400": { "description": "Validation or business error" } }
+      }
+    },
+    "/v1/auth/register": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Register",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RegisterRequest" } } }
+        },
+        "responses": { "200": { "description": "Auth tokens" }, "409": { "description": "Conflict (e.g. email in use or account scheduled for deletion)" } }
+      }
+    },
+    "/v1/auth/email/verify": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Verify email with OTP",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/EmailVerifyRequest" } } }
+        },
+        "responses": { "200": { "description": "Verified" }, "400": { "description": "Invalid OTP" } }
+      }
+    },
+    "/v1/auth/otp/resend": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Resend OTP",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ResendOtpRequest" } } }
+        },
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/v1/auth/password/forgot": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Request password reset",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ForgotPasswordRequest" } } }
+        },
+        "responses": { "200": { "description": "Generic success message" } }
+      }
+    },
+    "/v1/auth/password/reset": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Reset password with OTP",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ResetPasswordRequest" } } }
+        },
+        "responses": { "200": { "description": "Password reset" } }
+      }
+    },
+    "/v1/auth/password/change": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Change password (authenticated)",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ChangePasswordRequest" } } }
+        },
+        "responses": { "200": { "description": "OK" }, "401": { "description": "Unauthorized" } }
+      }
+    },
+    "/v1/auth/refresh-token": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Refresh access token",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RefreshTokenRequest" } } }
+        },
+        "responses": { "200": { "description": "New tokens" } }
+      }
+    },
+    "/v1/user/{id}": {
+      "get": {
+        "tags": ["User"],
+        "summary": "Get user by id (caller must match id)",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": {
+          "200": { "description": "User profile" },
+          "401": { "description": "Unauthorized" },
+          "403": { "description": "Caller id mismatch" },
+          "404": { "description": "Not found" }
+        }
+      }
+    },
+    "/v1/user/me/profile": {
+      "get": {
+        "tags": ["User"],
+        "summary": "Current user profile",
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "200": { "description": "User profile" }, "401": { "description": "Unauthorized" } }
+      }
+    },
+    "/v1/user/me/subscription": {
+      "get": {
+        "tags": ["User"],
+        "summary": "Current user subscription summary",
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "200": { "description": "Subscription status" }, "401": { "description": "Unauthorized" } }
+      }
+    },
+    "/v1/user/me": {
+      "delete": {
+        "tags": ["User"],
+        "summary": "Request account deletion (soft delete + grace period)",
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "204": { "description": "Deletion scheduled" }, "401": { "description": "Unauthorized" } }
+      }
+    },
+    "/v1/ai/query-ai-service": {
+      "post": {
+        "tags": ["AI"],
+        "summary": "AI query (non-streaming)",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ChatRequest" } } }
+        },
+        "responses": { "200": { "description": "Model output and usage" } }
+      }
+    },
+    "/v1/ai/prayer": {
+      "post": {
+        "tags": ["AI"],
+        "summary": "Prayer generation",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ChatRequest" } } }
+        },
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/v1/ai/chat": {
+      "post": {
+        "tags": ["AI"],
+        "summary": "Chat completion",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ChatRequest" } } }
+        },
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/v1/ai/query-ai-service/stream": {
+      "post": {
+        "tags": ["AI"],
+        "summary": "AI query (SSE)",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ChatRequest" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "text/event-stream (SSE chunks: delta, aiUsage, done)",
+            "content": { "text/event-stream": { "schema": { "type": "string" } } }
+          }
+        }
+      }
+    },
+    "/v1/ai/prayer/stream": {
+      "post": {
+        "tags": ["AI"],
+        "summary": "Prayer (SSE)",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ChatRequest" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "text/event-stream",
+            "content": { "text/event-stream": { "schema": { "type": "string" } } }
+          }
+        }
+      }
+    },
+    "/v1/ai/chat/stream": {
+      "post": {
+        "tags": ["AI"],
+        "summary": "Chat (SSE)",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ChatRequest" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "text/event-stream",
+            "content": { "text/event-stream": { "schema": { "type": "string" } } }
+          }
+        }
+      }
+    },
+    "/v1/ai/conversation-gospel/stream": {
+      "post": {
+        "tags": ["AI"],
+        "summary": "Conversation gospel chat (SSE)",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ConversationGospelChatStreamRequest" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "text/event-stream",
+            "content": { "text/event-stream": { "schema": { "type": "string" } } }
+          }
+        }
+      }
+    },
+    "/v1/ai/apply-verse": {
+      "post": {
+        "tags": ["AI"],
+        "summary": "Reflect / apply verse to a situation",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApplyVerseRequest" } } }
+        },
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/v1/note": {
+      "get": {
+        "tags": ["Notes"],
+        "summary": "List notes (paginated query params)",
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "200": { "description": "Paged notes" } }
+      },
+      "post": {
+        "tags": ["Notes"],
+        "summary": "Create note",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateNoteDto" } } }
+        },
+        "responses": { "201": { "description": "Created" } }
+      }
+    },
+    "/v1/note/{id}": {
+      "get": {
+        "tags": ["Notes"],
+        "summary": "Get note",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "OK" }, "403": { "description": "Forbidden" }, "404": { "description": "Not found" } }
+      },
+      "put": {
+        "tags": ["Notes"],
+        "summary": "Update note",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UpdateNoteDto" } } }
+        },
+        "responses": { "200": { "description": "OK" }, "404": { "description": "Not found" } }
+      },
+      "delete": {
+        "tags": ["Notes"],
+        "summary": "Delete note",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "OK" }, "400": { "description": "Cannot delete" } }
+      }
+    },
+    "/v1/savedverse": {
+      "get": {
+        "tags": ["Saved verses"],
+        "summary": "List saved verses",
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "200": { "description": "OK" } }
+      },
+      "post": {
+        "tags": ["Saved verses"],
+        "summary": "Add saved verse",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SavedVerseDto" } } }
+        },
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/v1/savedverse/{id}": {
+      "delete": {
+        "tags": ["Saved verses"],
+        "summary": "Delete saved verse",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "OK" }, "404": { "description": "Not found" } }
+      }
+    },
+    "/v1/recentactivity": {
+      "get": {
+        "tags": ["Recent activity"],
+        "summary": "List recent activities",
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "200": { "description": "OK" } }
+      },
+      "post": {
+        "tags": ["Recent activity"],
+        "summary": "Add activity",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AddActivityDto" } } }
+        },
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/v1/tts/synthesize": {
+      "post": {
+        "tags": ["TTS"],
+        "summary": "Text-to-speech",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TextToSpeechRequest" } } }
+        },
+        "responses": { "200": { "description": "Audio URL / metadata" } }
+      }
+    },
+    "/v1/admin/profile": {
+      "get": {
+        "tags": ["Admin"],
+        "summary": "Admin profile (Clerk admin + app user)",
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "200": { "description": "OK" }, "401": { "description": "Unauthorized" }, "403": { "description": "Not admin" } }
+      }
+    },
+    "/v1/admin/users": {
+      "get": {
+        "tags": ["Admin"],
+        "summary": "Paged users",
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "200": { "description": "Paged users" } }
+      }
+    },
+    "/v1/admin/users/{userId}": {
+      "get": {
+        "tags": ["Admin"],
+        "summary": "Get user",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "userId", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "OK" }, "404": { "description": "Not found" } }
+      }
+    },
+    "/v1/admin/users/{userId}/activate": {
+      "patch": {
+        "tags": ["Admin"],
+        "summary": "Activate user",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "userId", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/v1/admin/users/{userId}/deactivate": {
+      "patch": {
+        "tags": ["Admin"],
+        "summary": "Deactivate user",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "userId", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/v1/admin/users/{userId}/subscription": {
+      "patch": {
+        "tags": ["Admin"],
+        "summary": "Update subscription / plan",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "userId", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UpdateSubscriptionDto" } } }
+        },
+        "responses": { "200": { "description": "OK" }, "400": { "description": "Invalid body" } }
+      }
+    },
+    "/v1/admin/dashboard": {
+      "get": {
+        "tags": ["Admin"],
+        "summary": "Dashboard analytics",
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/v1/admin/dashboard/statistics": {
+      "get": {
+        "tags": ["Admin"],
+        "summary": "Dashboard statistics (JSON or CSV via `format=csv`)",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "JSON export or CSV attachment",
+            "content": {
+              "application/json": { "schema": { "type": "object" } },
+              "text/csv": { "schema": { "type": "string", "format": "binary" } }
+            }
+          }
+        }
+      }
+    },
+    "/v1/admin/users/{userId}/ai-quota": {
+      "get": {
+        "tags": ["Admin"],
+        "summary": "Get user AI quota",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "userId", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/v1/admin/users/{userId}/ai-quota/reset": {
+      "post": {
+        "tags": ["Admin"],
+        "summary": "Reset user AI quota",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "userId", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/v1/admin/users/{userId}/ai-quota/set-remaining": {
+      "post": {
+        "tags": ["Admin"],
+        "summary": "Set remaining AI quota (query: `remainingThisMonth`)",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "userId", "in": "path", "required": true, "schema": { "type": "string" } },
+          {
+            "name": "remainingThisMonth",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "integer" },
+            "description": "Remaining AI units for the month"
+          }
+        ],
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/v1/admin/account-deletion/purge": {
+      "post": {
+        "tags": ["Admin"],
+        "summary": "Purge soft-deleted users past grace period",
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "200": { "description": "Purge summary" } }
+      }
+    },
+    "/revenuecat/webhook": {
+      "post": {
+        "tags": ["Webhooks"],
+        "summary": "RevenueCat webhook",
+        "description": "`Authorization: Bearer <webhook secret>` must match app configuration (not a user JWT). Payload matches `RevenueCatWebHookEvent` / `EventData` in Application (snake_case JSON property names on nested `event`).",
+        "security": [{ "revenueCatWebhookBearer": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RevenueCatWebhookPayload" } } }
+        },
+        "responses": { "200": { "description": "Accepted" }, "401": { "description": "Unauthorized" }, "400": { "description": "Bad payload" } }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "JWT access token from login/register/refresh."
+      },
+      "revenueCatWebhookBearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Raw RevenueCat webhook secret as Bearer token."
+      }
+    },
+    "schemas": {
+      "LoginRequest": {
+        "type": "object",
+        "required": ["email", "password"],
+        "properties": {
+          "email": { "type": "string", "format": "email" },
+          "password": { "type": "string", "format": "password" }
+        }
+      },
+      "RegisterRequest": {
+        "type": "object",
+        "required": ["firstName", "lastName", "email", "password"],
+        "properties": {
+          "firstName": { "type": "string" },
+          "lastName": { "type": "string" },
+          "email": { "type": "string", "format": "email" },
+          "password": { "type": "string", "format": "password" }
+        }
+      },
+      "EmailVerifyRequest": {
+        "type": "object",
+        "required": ["otp", "email"],
+        "properties": {
+          "otp": { "type": "string" },
+          "email": { "type": "string", "format": "email" }
+        }
+      },
+      "OtpType": {
+        "type": "string",
+        "enum": ["EmailVerification", "PasswordReset"],
+        "description": "Domain enum `OtpType` serialized as string."
+      },
+      "ResendOtpRequest": {
+        "type": "object",
+        "required": ["email", "otpType"],
+        "properties": {
+          "email": { "type": "string", "format": "email" },
+          "otpType": { "$ref": "#/components/schemas/OtpType" }
+        }
+      },
+      "ForgotPasswordRequest": {
+        "type": "object",
+        "required": ["email"],
+        "properties": {
+          "email": { "type": "string", "format": "email" }
+        }
+      },
+      "ResetPasswordRequest": {
+        "type": "object",
+        "required": ["email", "otp", "newPassword"],
+        "properties": {
+          "email": { "type": "string", "format": "email" },
+          "otp": { "type": "string" },
+          "newPassword": { "type": "string", "format": "password" }
+        }
+      },
+      "ChangePasswordRequest": {
+        "type": "object",
+        "required": ["oldPassword", "password"],
+        "properties": {
+          "oldPassword": { "type": "string", "format": "password" },
+          "password": { "type": "string", "format": "password" }
+        }
+      },
+      "RefreshTokenRequest": {
+        "type": "object",
+        "required": ["refreshToken"],
+        "properties": {
+          "refreshToken": { "type": "string" }
+        }
+      },
+      "ChatRequest": {
+        "type": "object",
+        "required": ["prompt"],
+        "properties": {
+          "prompt": { "type": "string", "description": "Primary user prompt / question." }
+        }
+      },
+      "ChatMessageDto": {
+        "type": "object",
+        "required": ["role", "content"],
+        "properties": {
+          "role": { "type": "string", "description": "e.g. user / assistant / system" },
+          "content": { "type": "string" }
+        }
+      },
+      "ConversationGospelChatStreamRequest": {
+        "type": "object",
+        "required": ["messages"],
+        "properties": {
+          "messages": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "$ref": "#/components/schemas/ChatMessageDto" }
+          }
+        }
+      },
+      "ApplyVerseRequest": {
+        "type": "object",
+        "required": ["reference", "verseText"],
+        "properties": {
+          "reference": { "type": "string", "description": "Verse reference (e.g. John 3:16)." },
+          "verseText": { "type": "string" },
+          "userNote": { "type": "string", "nullable": true }
+        }
+      },
+      "CreateNoteDto": {
+        "type": "object",
+        "required": ["reference", "text"],
+        "properties": {
+          "reference": { "type": "string" },
+          "text": { "type": "string" }
+        }
+      },
+      "UpdateNoteDto": {
+        "type": "object",
+        "required": ["reference", "text"],
+        "properties": {
+          "reference": { "type": "string" },
+          "text": { "type": "string" }
+        }
+      },
+      "SavedVerseDto": {
+        "type": "object",
+        "required": ["reference", "text", "verse"],
+        "properties": {
+          "reference": { "type": "string" },
+          "text": { "type": "string" },
+          "verse": { "type": "integer" },
+          "pilcrow": { "type": "boolean", "default": false }
+        }
+      },
+      "ActivityType": {
+        "type": "string",
+        "enum": ["ReadBible", "AIAnalysis", "AddNote"],
+        "description": "Domain enum `ActivityType` serialized as string."
+      },
+      "AddActivityDto": {
+        "type": "object",
+        "required": ["title", "activityType"],
+        "properties": {
+          "title": { "type": "string" },
+          "activityType": { "$ref": "#/components/schemas/ActivityType" }
+        }
+      },
+      "TextToSpeechRequest": {
+        "type": "object",
+        "required": ["text"],
+        "properties": {
+          "text": { "type": "string" },
+          "book": { "type": "string", "nullable": true },
+          "voiceId": { "type": "string", "nullable": true },
+          "modelId": { "type": "string", "nullable": true }
+        }
+      },
+      "SubscriptionType": {
+        "type": "string",
+        "enum": ["Free", "Premium", "PremiumMonthly", "PremiumYearly"],
+        "description": "Domain enum `SubscriptionType` serialized as string."
+      },
+      "UpdateSubscriptionDto": {
+        "type": "object",
+        "required": ["subscriptionType"],
+        "properties": {
+          "subscriptionType": { "$ref": "#/components/schemas/SubscriptionType" },
+          "subscriptionExpiresAt": { "type": "string", "format": "date-time", "nullable": true }
+        }
+      },
+      "RevenueCatEventData": {
+        "type": "object",
+        "description": "Subset of RevenueCat event fields; model uses `[JsonPropertyName]` snake_case. Additional fields allowed.",
+        "additionalProperties": true,
+        "properties": {
+          "id": { "type": "string" },
+          "type": { "type": "string" },
+          "app_user_id": { "type": "string" },
+          "product_id": { "type": "string" },
+          "period_type": { "type": "string" },
+          "purchased_at_ms": { "type": "integer", "format": "int64" },
+          "expiration_at_ms": { "type": "integer", "format": "int64" }
+        }
+      },
+      "RevenueCatWebhookPayload": {
+        "type": "object",
+        "required": ["event"],
+        "properties": {
+          "event": { "$ref": "#/components/schemas/RevenueCatEventData" }
+        }
+      }
+    }
+  }
+}
