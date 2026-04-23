@@ -11,6 +11,7 @@ using System.Text.Json.Serialization;
 var builder = FunctionsApplication.CreateBuilder(args);
 
 builder.AddInvocationLogging();
+builder.AddHttpCors();
 
 builder.ConfigureFunctionsWebApplication();
 

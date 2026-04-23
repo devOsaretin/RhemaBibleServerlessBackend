@@ -83,7 +83,7 @@ public class AdminService(
 
   public async Task<UserDto> UpdateUsersPlanAsync(string userId, UpdateSubscriptionDto plan, CancellationToken cancellationToken)
   {
-    var currentUser = await userService.GetByIdAsync(userId, cancellationToken);
+    var currentUser = await users.GetByIdIncludingDeletedAsync(userId, cancellationToken);
     if (currentUser == null)
       throw new ResourceNotFoundException($"User with ID '{userId}' was not found.");
 
