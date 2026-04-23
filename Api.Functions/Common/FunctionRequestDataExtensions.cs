@@ -51,7 +51,6 @@ public static class FunctionRequestDataExtensions
     this HttpRequestData request,
     IFunctionTokenValidator tokenValidator,
     ICurrentPrincipalAccessor principalAccessor,
-    IUserApplicationService userService,
     CancellationToken cancellationToken)
   {
     if (!request.Headers.TryGetValues("Authorization", out var values))
@@ -75,10 +74,6 @@ public static class FunctionRequestDataExtensions
     var userId = principal.GetAuthenticatedUserId();
     if (string.IsNullOrWhiteSpace(userId))
       throw new UnauthorizedAccessException("User id not found in token");
-
-    var user = await userService.GetByIdAsync(userId, cancellationToken);
-    if (user == null)
-      throw new UnauthorizedAccessException("Account is deleted or unavailable");
 
     return principal;
   }
