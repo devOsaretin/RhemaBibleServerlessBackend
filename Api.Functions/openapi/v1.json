@@ -374,7 +374,7 @@
     "/v1/admin/profile": {
       "get": {
         "tags": ["Admin"],
-        "summary": "Admin profile (Clerk admin + app user)",
+        "summary": "Admin profile (app user if registered, else Clerk claims only)",
         "security": [{ "bearerAuth": [] }],
         "responses": { "200": { "description": "OK" }, "401": { "description": "Unauthorized" }, "403": { "description": "Not admin" } }
       }
