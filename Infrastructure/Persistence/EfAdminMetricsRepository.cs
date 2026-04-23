@@ -19,34 +19,25 @@ public sealed class EfAdminMetricsRepository(RhemaDbContext db) : IAdminMetricsR
     var firstDayOfThisMonth = new DateTime(nowUtc.Year, nowUtc.Month, 1, 0, 0, 0, DateTimeKind.Utc);
     var users = db.Users.AsNoTracking();
 
-    var totalUsersTask = users.LongCountAsync(cancellationToken);
-    var totalPremiumUsersTask = users.LongCountAsync(u => PremiumKinds.Contains(u.SubscriptionType), cancellationToken);
-    var totalFreeUsersTask = users.LongCountAsync(u => u.SubscriptionType == SubscriptionType.Free, cancellationToken);
-    var activeUsersTask = users.LongCountAsync(u => u.Status == AccountStatus.Active, cancellationToken);
-    var newUsersThisMonthTask = users.LongCountAsync(u => u.CreatedAt >= firstDayOfThisMonth, cancellationToken);
-    var premiumMonthlyUsersTask = users.LongCountAsync(u => u.SubscriptionType == SubscriptionType.PremiumMonthly, cancellationToken);
-    var premiumYearlyUsersTask = users.LongCountAsync(u => u.SubscriptionType == SubscriptionType.PremiumYearly, cancellationToken);
-    var legacyPremiumUsersTask = users.LongCountAsync(u => u.SubscriptionType == SubscriptionType.Premium, cancellationToken);
-
-    await Task.WhenAll(
-      totalUsersTask,
-      totalPremiumUsersTask,
-      totalFreeUsersTask,
-      activeUsersTask,
-      newUsersThisMonthTask,
-      premiumMonthlyUsersTask,
-      premiumYearlyUsersTask,
-      legacyPremiumUsersTask);
+    // One DbContext cannot run multiple queries concurrently; await sequentially.
+    var totalUsers = await users.LongCountAsync(cancellationToken);
+    var totalPremiumUsers = await users.LongCountAsync(u => PremiumKinds.Contains(u.SubscriptionType), cancellationToken);
+    var totalFreeUsers = await users.LongCountAsync(u => u.SubscriptionType == SubscriptionType.Free, cancellationToken);
+    var activeUsers = await users.LongCountAsync(u => u.Status == AccountStatus.Active, cancellationToken);
+    var newUsersThisMonth = await users.LongCountAsync(u => u.CreatedAt >= firstDayOfThisMonth, cancellationToken);
+    var premiumMonthlyUsers = await users.LongCountAsync(u => u.SubscriptionType == SubscriptionType.PremiumMonthly, cancellationToken);
+    var premiumYearlyUsers = await users.LongCountAsync(u => u.SubscriptionType == SubscriptionType.PremiumYearly, cancellationToken);
+    var legacyPremiumUsers = await users.LongCountAsync(u => u.SubscriptionType == SubscriptionType.Premium, cancellationToken);
 
     return new DashboardAnalyticsDto(
-      TotalUsers: totalUsersTask.Result,
-      TotalPremiumUsers: totalPremiumUsersTask.Result,
-      TotalFreeUsers: totalFreeUsersTask.Result,
-      ActiveUsers: activeUsersTask.Result,
-      NewUsersThisMonth: newUsersThisMonthTask.Result,
-      PremiumMonthlyUsers: premiumMonthlyUsersTask.Result,
-      PremiumYearlyUsers: premiumYearlyUsersTask.Result,
-      LegacyPremiumUsers: legacyPremiumUsersTask.Result);
+      TotalUsers: totalUsers,
+      TotalPremiumUsers: totalPremiumUsers,
+      TotalFreeUsers: totalFreeUsers,
+      ActiveUsers: activeUsers,
+      NewUsersThisMonth: newUsersThisMonth,
+      PremiumMonthlyUsers: premiumMonthlyUsers,
+      PremiumYearlyUsers: premiumYearlyUsers,
+      LegacyPremiumUsers: legacyPremiumUsers);
   }
 
   public async Task<DashboardStatisticsRawData> GetStatisticsRawAsync(
@@ -66,86 +57,79 @@ public sealed class EfAdminMetricsRepository(RhemaDbContext db) : IAdminMetricsR
     var sevenDaysAgo = nowUtc.AddDays(-7);
     var activitySince = nowUtc.AddDays(-30);
 
-    var totalUsersTask = users.LongCountAsync(cancellationToken);
-    var activeUsersTask = users.LongCountAsync(u => u.Status == AccountStatus.Active, cancellationToken);
-    var suspendedUsersTask = users.LongCountAsync(u => u.Status == AccountStatus.Suspended, cancellationToken);
-    var emailVerifiedTask = users.LongCountAsync(u => u.IsEmailVerified, cancellationToken);
-    var emailNotVerifiedTask = users.LongCountAsync(u => !u.IsEmailVerified, cancellationToken);
+    // One DbContext cannot run multiple queries concurrently; await sequentially.
+    var totalUsers = await users.LongCountAsync(cancellationToken);
+    var activeUsers = await users.LongCountAsync(u => u.Status == AccountStatus.Active, cancellationToken);
+    var suspendedUsers = await users.LongCountAsync(u => u.Status == AccountStatus.Suspended, cancellationToken);
+    var emailVerified = await users.LongCountAsync(u => u.IsEmailVerified, cancellationToken);
+    var emailNotVerified = await users.LongCountAsync(u => !u.IsEmailVerified, cancellationToken);
 
-    var totalPremiumTask = users.LongCountAsync(u => PremiumKinds.Contains(u.SubscriptionType), cancellationToken);
-    var totalFreeTask = users.LongCountAsync(u => u.SubscriptionType == SubscriptionType.Free, cancellationToken);
-    var premiumMonthlyTask = users.LongCountAsync(u => u.SubscriptionType == SubscriptionType.PremiumMonthly, cancellationToken);
-    var premiumYearlyTask = users.LongCountAsync(u => u.SubscriptionType == SubscriptionType.PremiumYearly, cancellationToken);
-    var legacyPremiumTask = users.LongCountAsync(u => u.SubscriptionType == SubscriptionType.Premium, cancellationToken);
+    var totalPremium = await users.LongCountAsync(u => PremiumKinds.Contains(u.SubscriptionType), cancellationToken);
+    var totalFree = await users.LongCountAsync(u => u.SubscriptionType == SubscriptionType.Free, cancellationToken);
+    var premiumMonthly = await users.LongCountAsync(u => u.SubscriptionType == SubscriptionType.PremiumMonthly, cancellationToken);
+    var premiumYearly = await users.LongCountAsync(u => u.SubscriptionType == SubscriptionType.PremiumYearly, cancellationToken);
+    var legacyPremium = await users.LongCountAsync(u => u.SubscriptionType == SubscriptionType.Premium, cancellationToken);
 
-    var newThisMonthTask = users.LongCountAsync(u => u.CreatedAt >= firstDayOfThisMonth, cancellationToken);
-    var newPrevMonthTask = users.LongCountAsync(
+    var newThisMonth = await users.LongCountAsync(u => u.CreatedAt >= firstDayOfThisMonth, cancellationToken);
+    var newPrevMonth = await users.LongCountAsync(
       u => u.CreatedAt >= firstDayOfLastMonth && u.CreatedAt < firstDayOfThisMonth,
       cancellationToken);
-    var newLast7DaysTask = users.LongCountAsync(u => u.CreatedAt >= sevenDaysAgo, cancellationToken);
+    var newLast7Days = await users.LongCountAsync(u => u.CreatedAt >= sevenDaysAgo, cancellationToken);
 
-    var totalNotesTask = notes.LongCountAsync(cancellationToken);
-    var totalVersesTask = verses.LongCountAsync(cancellationToken);
+    var totalNotesCount = await notes.LongCountAsync(cancellationToken);
+    var totalVersesCount = await verses.LongCountAsync(cancellationToken);
 
-    var activitiesTotalTask = activities.LongCountAsync(a => a.CreatedAt >= activitySince, cancellationToken);
-    var actAiTask = activities.LongCountAsync(
+    var activitiesTotal = await activities.LongCountAsync(a => a.CreatedAt >= activitySince, cancellationToken);
+    var actAi = await activities.LongCountAsync(
       a => a.CreatedAt >= activitySince && a.ActivityType == ActivityType.AIAnalysis,
       cancellationToken);
-    var actNoteTask = activities.LongCountAsync(
+    var actNote = await activities.LongCountAsync(
       a => a.CreatedAt >= activitySince && a.ActivityType == ActivityType.AddNote,
       cancellationToken);
-    var actReadTask = activities.LongCountAsync(
+    var actRead = await activities.LongCountAsync(
       a => a.CreatedAt >= activitySince && a.ActivityType == ActivityType.ReadBible,
       cancellationToken);
 
-    var usersTrackedMonthTask = users.LongCountAsync(u => u.AiFreeCallsMonthKey == aiMonthKeyUtc, cancellationToken);
-    var usersAtLimitTask = users.LongCountAsync(
+    var usersTrackedMonth = await users.LongCountAsync(u => u.AiFreeCallsMonthKey == aiMonthKeyUtc, cancellationToken);
+    var usersAtLimit = await users.LongCountAsync(
       u => u.AiFreeCallsMonthKey == aiMonthKeyUtc && u.AiFreeCallsUsedInMonth >= freeCallsLimitPerMonth,
       cancellationToken);
 
-    var signupsCursorTask = users
+    var signupsCursor = await users
       .Where(u => u.CreatedAt >= thirtyDaysAgo)
       .Select(u => u.CreatedAt)
       .ToListAsync(cancellationToken);
 
-    var usageSumTask = users
+    var usageSum = await users
       .Where(u => u.AiFreeCallsMonthKey == aiMonthKeyUtc)
       .Select(u => u.AiFreeCallsUsedInMonth)
       .ToListAsync(cancellationToken);
 
-    await Task.WhenAll(
-      totalUsersTask, activeUsersTask, suspendedUsersTask, emailVerifiedTask, emailNotVerifiedTask,
-      totalPremiumTask, totalFreeTask, premiumMonthlyTask, premiumYearlyTask, legacyPremiumTask,
-      newThisMonthTask, newPrevMonthTask, newLast7DaysTask,
-      totalNotesTask, totalVersesTask,
-      activitiesTotalTask, actAiTask, actNoteTask, actReadTask,
-      usersTrackedMonthTask, usersAtLimitTask, signupsCursorTask, usageSumTask);
-
     return new DashboardStatisticsRawData
     {
-      TotalUsers = totalUsersTask.Result,
-      ActiveUsers = activeUsersTask.Result,
-      SuspendedUsers = suspendedUsersTask.Result,
-      EmailVerifiedUsers = emailVerifiedTask.Result,
-      EmailNotVerifiedUsers = emailNotVerifiedTask.Result,
-      TotalPremiumUsers = totalPremiumTask.Result,
-      TotalFreeUsers = totalFreeTask.Result,
-      PremiumMonthlyUsers = premiumMonthlyTask.Result,
-      PremiumYearlyUsers = premiumYearlyTask.Result,
-      LegacyPremiumUsers = legacyPremiumTask.Result,
-      NewUsersThisUtcMonth = newThisMonthTask.Result,
-      NewUsersPreviousUtcMonth = newPrevMonthTask.Result,
-      NewUsersLast7Days = newLast7DaysTask.Result,
-      TotalNotes = totalNotesTask.Result,
-      TotalSavedVerses = totalVersesTask.Result,
-      ActivitiesLast30Days = activitiesTotalTask.Result,
-      AiAnalysisActivitiesLast30Days = actAiTask.Result,
-      AddNoteActivitiesLast30Days = actNoteTask.Result,
-      ReadBibleActivitiesLast30Days = actReadTask.Result,
-      UsersWithUsageTrackedThisMonth = usersTrackedMonthTask.Result,
-      UsersAtOrOverFreeLimitThisMonth = usersAtLimitTask.Result,
-      SignupCreatedDatesInWindow = signupsCursorTask.Result,
-      AiFreeCallsUsedInMonthValues = usageSumTask.Result
+      TotalUsers = totalUsers,
+      ActiveUsers = activeUsers,
+      SuspendedUsers = suspendedUsers,
+      EmailVerifiedUsers = emailVerified,
+      EmailNotVerifiedUsers = emailNotVerified,
+      TotalPremiumUsers = totalPremium,
+      TotalFreeUsers = totalFree,
+      PremiumMonthlyUsers = premiumMonthly,
+      PremiumYearlyUsers = premiumYearly,
+      LegacyPremiumUsers = legacyPremium,
+      NewUsersThisUtcMonth = newThisMonth,
+      NewUsersPreviousUtcMonth = newPrevMonth,
+      NewUsersLast7Days = newLast7Days,
+      TotalNotes = totalNotesCount,
+      TotalSavedVerses = totalVersesCount,
+      ActivitiesLast30Days = activitiesTotal,
+      AiAnalysisActivitiesLast30Days = actAi,
+      AddNoteActivitiesLast30Days = actNote,
+      ReadBibleActivitiesLast30Days = actRead,
+      UsersWithUsageTrackedThisMonth = usersTrackedMonth,
+      UsersAtOrOverFreeLimitThisMonth = usersAtLimit,
+      SignupCreatedDatesInWindow = signupsCursor,
+      AiFreeCallsUsedInMonthValues = usageSum
     };
   }
 }

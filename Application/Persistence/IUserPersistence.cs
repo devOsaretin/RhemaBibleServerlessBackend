@@ -4,6 +4,7 @@ public interface IUserPersistence
 {
   Task<List<User>> GetAllAsync(CancellationToken cancellationToken = default);
   Task<User?> GetByIdAsync(string id, CancellationToken cancellationToken = default);
+  Task<User?> GetByIdIncludingDeletedAsync(string id, CancellationToken cancellationToken = default);
   Task<User?> GetByEmailAsync(string email, CancellationToken cancellationToken = default);
   Task<User?> GetByEmailIncludingDeletedAsync(string email, CancellationToken cancellationToken = default);
   Task InsertAsync(User user, CancellationToken cancellationToken = default);
