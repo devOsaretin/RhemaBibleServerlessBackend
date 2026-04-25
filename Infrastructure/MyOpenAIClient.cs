@@ -246,6 +246,26 @@ public class MyOpenAIClient : IAIClient
             yield return part;
     }
 
+    public async IAsyncEnumerable<AiStreamPart> StreamGenerateApplyVerseAsync(
+        ApplyVerseRequest request,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        var (reference, verseText, userNote) = ApplyVerseRequestValidator.NormalizeOrThrow(request);
+
+        var (user, hasActivePremium) = await GetUserForAiAsync(cancellationToken);
+        var usage = await ResolveUsageAsync(user, hasActivePremium, cancellationToken);
+        yield return new AiStreamUsagePart(usage);
+
+        // Log early so streaming UX isn't blocked on the end of generation.
+        await LogReflectVerseActivity(user.Id!, reference, cancellationToken);
+
+        var prompt = PromptHelper.GenerateApplyVersePrompt(_promptFiles, reference, verseText, userNote, user.FirstName);
+        var userQueryForLog = $"Apply verse: {reference}";
+
+        await foreach (var part in StreamCompletionCoreAsync(user.Id!, userQueryForLog, prompt, cancellationToken))
+            yield return part;
+    }
+
     public async IAsyncEnumerable<AiStreamPart> StreamGenerateConversationGospelChatAsync(
         IReadOnlyList<ChatMessageDto> conversationMessages,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)

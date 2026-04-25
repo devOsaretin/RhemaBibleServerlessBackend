@@ -15,6 +15,10 @@ public interface IAIClient
 
     IAsyncEnumerable<AiStreamPart> StreamGenerateChatAsync(string prompt, CancellationToken cancellationToken = default);
 
+    IAsyncEnumerable<AiStreamPart> StreamGenerateApplyVerseAsync(
+        ApplyVerseRequest request,
+        CancellationToken cancellationToken = default);
+
     IAsyncEnumerable<AiStreamPart> StreamGenerateConversationGospelChatAsync(
         IReadOnlyList<ChatMessageDto> conversationMessages,
         CancellationToken cancellationToken = default);

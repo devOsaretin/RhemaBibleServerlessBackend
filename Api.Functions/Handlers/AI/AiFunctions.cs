@@ -20,6 +20,7 @@ public class AiFunctions(
   };
 
   private const int DefaultDeltaChunkSize = 96;
+  private static readonly TimeSpan SseHeartbeatInterval = TimeSpan.FromSeconds(1);
 
   [Function("AI_QueryAiService")]
   public Task<HttpResponseData> QueryAiService(
@@ -90,10 +91,16 @@ public class AiFunctions(
         var res = CreateSseResponse(req);
         try
         {
+          var debugRaw =
+            req.Url.Query.Contains("debugRaw=1", StringComparison.OrdinalIgnoreCase) ||
+            (req.Headers.TryGetValues("X-Stream-Debug", out var dbg) &&
+             dbg.Any(v => string.Equals(v?.Trim(), "raw", StringComparison.OrdinalIgnoreCase)));
+
           // True streaming: extract and emit typed deltas while the model is still generating.
           await WriteTypedEventsFromQueryJsonStreamAsync(
             res,
             aiClient.StreamGenerateAsync(query.Prompt, ct),
+            debugRaw,
             ct);
         }
         catch (Exception ex)
@@ -119,7 +126,14 @@ public class AiFunctions(
       {
         var query = await req.ReadRequiredJsonAsync<ChatRequest>(ct);
         var res = CreateSseResponse(req);
-        await WriteSseStreamAsync(res, aiClient.StreamGeneratePrayerAsync(query.Prompt, ct), defaultDeltaType: "prayer", ct);
+        // Stream only the `prayer` string from the JSON-in-progress, so clients see text quickly
+        // and never have to render raw JSON fragments.
+        await WriteTypedEventsFromSingleStringJsonStreamAsync(
+          res,
+          aiClient.StreamGeneratePrayerAsync(query.Prompt, ct),
+          jsonPropertyName: "prayer",
+          type: "prayer",
+          ct);
         return res;
       },
       tokenValidator,
@@ -139,7 +153,13 @@ public class AiFunctions(
       {
         var query = await req.ReadRequiredJsonAsync<ChatRequest>(ct);
         var res = CreateSseResponse(req);
-        await WriteSseStreamAsync(res, aiClient.StreamGenerateChatAsync(query.Prompt, ct), defaultDeltaType: "text", ct);
+        // Stream only the main `answer` string from the JSON-in-progress as `type:"text"`.
+        await WriteTypedEventsFromSingleStringJsonStreamAsync(
+          res,
+          aiClient.StreamGenerateChatAsync(query.Prompt, ct),
+          jsonPropertyName: "answer",
+          type: "text",
+          ct);
         return res;
       },
       tokenValidator,
@@ -201,10 +221,10 @@ public class AiFunctions(
         var res = CreateSseResponse(req);
         try
         {
-          var result = await aiClient.GenerateApplyVerseAsync(body, ct);
-          await WriteSseAsync(res, new { aiUsage = result.AiUsage }, ct);
-          await StreamApplyVerseTypedEventsAsync(res, result.Data, ct);
-          await WriteSseAsync(res, new { type = "done" }, ct);
+          await WriteTypedEventsFromApplyVerseJsonStreamAsync(
+            res,
+            aiClient.StreamGenerateApplyVerseAsync(body, ct),
+            ct);
         }
         catch (Exception ex)
         {
@@ -224,7 +244,8 @@ public class AiFunctions(
   {
     var res = req.CreateResponse(HttpStatusCode.OK);
     res.Headers.Add("Content-Type", "text/event-stream; charset=utf-8");
-    res.Headers.Add("Cache-Control", "no-cache");
+    // no-transform helps prevent proxies/CDNs from buffering or changing the stream.
+    res.Headers.Add("Cache-Control", "no-cache, no-transform");
     res.Headers.Add("Connection", "keep-alive");
     res.Headers.Add("X-Accel-Buffering", "no");
     return res;
@@ -238,14 +259,29 @@ public class AiFunctions(
     await response.Body.FlushAsync(cancellationToken);
   }
 
+  private static async Task WriteSseCommentAsync(HttpResponseData response, string comment, CancellationToken cancellationToken)
+  {
+    // SSE comment line. Many clients/proxies will flush on newlines.
+    var bytes = Encoding.UTF8.GetBytes($": {comment}\n\n");
+    await response.Body.WriteAsync(bytes, 0, bytes.Length, cancellationToken);
+    await response.Body.FlushAsync(cancellationToken);
+  }
+
   private static async Task WriteSseStreamAsync(
     HttpResponseData response,
     IAsyncEnumerable<AiStreamPart> parts,
     string defaultDeltaType,
     CancellationToken cancellationToken)
   {
+    var lastHeartbeat = DateTimeOffset.UtcNow;
     await foreach (var part in parts.WithCancellation(cancellationToken))
     {
+      if (DateTimeOffset.UtcNow - lastHeartbeat >= SseHeartbeatInterval)
+      {
+        await WriteSseCommentAsync(response, "ping", cancellationToken);
+        lastHeartbeat = DateTimeOffset.UtcNow;
+      }
+
       switch (part)
       {
         case AiStreamUsagePart u:
@@ -264,9 +300,62 @@ public class AiFunctions(
     }
   }
 
+  private static async Task WriteTypedEventsFromSingleStringJsonStreamAsync(
+    HttpResponseData response,
+    IAsyncEnumerable<AiStreamPart> parts,
+    string jsonPropertyName,
+    string type,
+    CancellationToken ct)
+  {
+    var extractor = new StringPropertyExtractor(jsonPropertyName, type);
+    var buffer = string.Empty;
+    var doneSeen = false;
+    var lastHeartbeat = DateTimeOffset.UtcNow;
+
+    await WriteSseAsync(response, new { type = "keepalive" }, ct);
+
+    await foreach (var part in parts.WithCancellation(ct))
+    {
+      if (DateTimeOffset.UtcNow - lastHeartbeat >= SseHeartbeatInterval)
+      {
+        await WriteSseAsync(response, new { type = "keepalive" }, ct);
+        lastHeartbeat = DateTimeOffset.UtcNow;
+      }
+
+      switch (part)
+      {
+        case AiStreamUsagePart u:
+          await WriteSseAsync(response, new { aiUsage = u.AiUsage }, ct);
+          break;
+        case AiStreamDeltaPart d:
+        {
+          if (string.IsNullOrEmpty(d.Delta))
+            break;
+
+          buffer = buffer.Length == 0 ? d.Delta : buffer + d.Delta;
+          if (buffer.Length > 32_768)
+            buffer = buffer[^32_768..];
+
+          var outEvents = new List<object>(capacity: 4);
+          buffer = extractor.Push(buffer, outEvents);
+          foreach (var ev in outEvents)
+            await WriteSseAsync(response, ev, ct);
+          break;
+        }
+        case AiStreamDonePart:
+          doneSeen = true;
+          break;
+      }
+    }
+
+    if (doneSeen)
+      await WriteSseAsync(response, new { type = "done" }, ct);
+  }
+
   private static async Task WriteTypedEventsFromQueryJsonStreamAsync(
     HttpResponseData response,
     IAsyncEnumerable<AiStreamPart> parts,
+    bool emitRawDebugDeltas,
     CancellationToken cancellationToken)
   {
     var extractor = new QueryJsonTypedEventExtractor();
@@ -274,9 +363,21 @@ public class AiFunctions(
     var sawAnyRawDelta = false;
     var raw = new StringBuilder(capacity: 8 * 1024);
     var doneSeen = false;
+    var lastHeartbeat = DateTimeOffset.UtcNow;
+
+    // Many API clients (including Postman) do not reliably render SSE comment heartbeats.
+    // Emit a tiny typed keepalive envelope so clients can display incremental progress
+    // even while we are still searching for safe typed JSON field boundaries.
+    await WriteSseAsync(response, new { type = "keepalive" }, cancellationToken);
 
     await foreach (var part in parts.WithCancellation(cancellationToken))
     {
+      if (DateTimeOffset.UtcNow - lastHeartbeat >= SseHeartbeatInterval)
+      {
+        await WriteSseAsync(response, new { type = "keepalive" }, cancellationToken);
+        lastHeartbeat = DateTimeOffset.UtcNow;
+      }
+
       switch (part)
       {
         case AiStreamUsagePart u:
@@ -290,10 +391,19 @@ public class AiFunctions(
           sawAnyRawDelta = true;
           raw.Append(d.Delta);
 
+          var emitted = false;
           foreach (var ev in extractor.Push(d.Delta))
           {
             sawAnyTypedDelta = true;
+            emitted = true;
             await WriteSseAsync(response, ev, cancellationToken);
+          }
+
+          // If we couldn't extract any typed field deltas yet, still stream the raw upstream
+          // delta so tools like Postman show incremental progress. RhemaApp ignores unknown types.
+          if (emitRawDebugDeltas && !emitted)
+          {
+            await WriteSseAsync(response, new { type = "rawDelta", delta = d.Delta }, cancellationToken);
           }
           break;
         }
@@ -692,6 +802,111 @@ public class AiFunctions(
     await StreamJsonStringPropertyAsync(res, je, jsonPropertyName: "practicalAction", type: "practicalAction", index: null, ct);
     await StreamJsonStringPropertyAsync(res, je, jsonPropertyName: "prayer", type: "prayer", index: null, ct);
     await StreamJsonStringArrayPropertyAsync(res, je, jsonPropertyName: "supportingVerses", type: "supportingVerses", ct);
+  }
+
+  private static async Task WriteTypedEventsFromApplyVerseJsonStreamAsync(
+    HttpResponseData response,
+    IAsyncEnumerable<AiStreamPart> parts,
+    CancellationToken cancellationToken)
+  {
+    var extractor = new ApplyVerseJsonTypedEventExtractor();
+    var sawAnyTypedDelta = false;
+    var doneSeen = false;
+    var lastHeartbeat = DateTimeOffset.UtcNow;
+
+    await WriteSseAsync(response, new { type = "keepalive" }, cancellationToken);
+
+    await foreach (var part in parts.WithCancellation(cancellationToken))
+    {
+      if (DateTimeOffset.UtcNow - lastHeartbeat >= SseHeartbeatInterval)
+      {
+        await WriteSseAsync(response, new { type = "keepalive" }, cancellationToken);
+        lastHeartbeat = DateTimeOffset.UtcNow;
+      }
+
+      switch (part)
+      {
+        case AiStreamUsagePart u:
+          await WriteSseAsync(response, new { aiUsage = u.AiUsage }, cancellationToken);
+          break;
+        case AiStreamDeltaPart d:
+        {
+          if (string.IsNullOrEmpty(d.Delta))
+            break;
+
+          foreach (var ev in extractor.Push(d.Delta))
+          {
+            sawAnyTypedDelta = true;
+            await WriteSseAsync(response, ev, cancellationToken);
+          }
+          break;
+        }
+        case AiStreamDonePart:
+          doneSeen = true;
+          break;
+      }
+    }
+
+    // If we streamed nothing typed (e.g. model violated schema), at least end the stream cleanly.
+    if (doneSeen || sawAnyTypedDelta)
+      await WriteSseAsync(response, new { type = "done" }, cancellationToken);
+  }
+
+  private sealed class ApplyVerseJsonTypedEventExtractor
+  {
+    private readonly List<object> _out = new(capacity: 8);
+    private int _fieldIndex;
+    private readonly StringPropertyExtractor _lifeInsight = new("lifeInsight", "lifeInsight");
+    private readonly StringPropertyExtractor _practicalAction = new("practicalAction", "practicalAction");
+    private readonly StringPropertyExtractor _prayer = new("prayer", "prayer");
+    private readonly StringArrayPropertyExtractor _supportingVerses = new("supportingVerses", "supportingVerses");
+    private string _buffer = string.Empty;
+    private const int MaxBufferChars = 32_768;
+
+    public IEnumerable<object> Push(string chunk)
+    {
+      _out.Clear();
+      if (chunk.Length == 0) return _out;
+
+      _buffer = _buffer.Length == 0 ? chunk : _buffer + chunk;
+      if (_buffer.Length > MaxBufferChars)
+        _buffer = _buffer[^MaxBufferChars..];
+
+      var remaining = _buffer;
+      while (remaining.Length > 0)
+      {
+        var beforeLen = remaining.Length;
+
+        switch (_fieldIndex)
+        {
+          case 0:
+            remaining = _lifeInsight.Push(remaining, _out);
+            if (_lifeInsight.IsComplete) _fieldIndex++;
+            break;
+          case 1:
+            remaining = _practicalAction.Push(remaining, _out);
+            if (_practicalAction.IsComplete) _fieldIndex++;
+            break;
+          case 2:
+            remaining = _prayer.Push(remaining, _out);
+            if (_prayer.IsComplete) _fieldIndex++;
+            break;
+          case 3:
+            remaining = _supportingVerses.Push(remaining, _out);
+            if (_supportingVerses.IsComplete) _fieldIndex++;
+            break;
+          default:
+            remaining = string.Empty;
+            break;
+        }
+
+        if (remaining.Length == beforeLen)
+          break;
+      }
+
+      _buffer = remaining;
+      return _out;
+    }
   }
 
   private static async Task StreamJsonStringPropertyAsync(
