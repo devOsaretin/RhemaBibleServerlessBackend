@@ -200,7 +200,7 @@
         },
         "responses": {
           "200": {
-            "description": "text/event-stream (SSE chunks: delta, aiUsage, done)",
+            "description": "text/event-stream (SSE typed events: data:{type, delta}, optional data:{aiUsage}, ends with data:{type:\"done\"})",
             "content": { "text/event-stream": { "schema": { "type": "string" } } }
           }
         }
@@ -217,7 +217,7 @@
         },
         "responses": {
           "200": {
-            "description": "text/event-stream",
+            "description": "text/event-stream (SSE typed events: data:{type:\"prayer\"|\"text\", delta}, optional data:{aiUsage}, ends with data:{type:\"done\"})",
             "content": { "text/event-stream": { "schema": { "type": "string" } } }
           }
         }
@@ -234,7 +234,7 @@
         },
         "responses": {
           "200": {
-            "description": "text/event-stream",
+            "description": "text/event-stream (SSE typed events: data:{type:\"text\", delta}, optional data:{aiUsage}, ends with data:{type:\"done\"})",
             "content": { "text/event-stream": { "schema": { "type": "string" } } }
           }
         }
@@ -251,7 +251,7 @@
         },
         "responses": {
           "200": {
-            "description": "text/event-stream",
+            "description": "text/event-stream (SSE typed events: data:{type:\"text\", delta}, optional data:{aiUsage}, ends with data:{type:\"done\"})",
             "content": { "text/event-stream": { "schema": { "type": "string" } } }
           }
         }
@@ -267,6 +267,23 @@
           "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApplyVerseRequest" } } }
         },
         "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/v1/ai/apply-verse/stream": {
+      "post": {
+        "tags": ["AI"],
+        "summary": "Reflect / apply verse (SSE)",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApplyVerseRequest" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "text/event-stream (SSE typed events: lifeInsight, practicalAction, prayer, supportingVerses+index; optional data:{aiUsage}; ends with data:{type:\"done\"})",
+            "content": { "text/event-stream": { "schema": { "type": "string" } } }
+          }
+        }
       }
     },
     "/v1/note": {
